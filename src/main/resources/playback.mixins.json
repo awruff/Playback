@@ -1,0 +1,11 @@
+{
+  "required": true,
+  "package": "org.polyfrost.playback.mixin",
+  "compatibilityLevel": "${java}",
+  "client": [
+    ${mixin_classes}
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

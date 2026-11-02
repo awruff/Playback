@@ -37,7 +37,7 @@ dependencies {
 loom {
     fabricModJsonPath = rootProject.file("src/main/resources/fabric.mod.json")
     accessWidenerPath = sc.process(
-        rootProject.file("src/main/resources/polyreplay.accesswidener"),
+        rootProject.file("src/main/resources/playback.accesswidener"),
         "build/processed.accesswidener"
     )
 

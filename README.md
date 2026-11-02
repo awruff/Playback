@@ -1,4 +1,4 @@
-# PolyReplay
+# Playback
 
 An add-on for [Flashback](https://github.com/Moulberry/Flashback) that makes first person replays look like
 what the player saw.

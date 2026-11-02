@@ -23,4 +23,4 @@ stonecutter {
     }
 }
 
-rootProject.name = "polyreplay"
+rootProject.name = "playback"
