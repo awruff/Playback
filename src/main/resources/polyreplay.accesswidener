@@ -1,0 +1,34 @@
+classTweaker v1 official
+
+#? if >=26.3 {
+accessible field net/minecraft/client/player/FirstPersonHandsAndItems mainHandItem Lnet/minecraft/world/item/ItemStack;
+accessible field net/minecraft/client/player/FirstPersonHandsAndItems offHandItem Lnet/minecraft/world/item/ItemStack;
+accessible field net/minecraft/client/player/FirstPersonHandsAndItems mainHandHeight F
+accessible field net/minecraft/client/player/FirstPersonHandsAndItems oMainHandHeight F
+accessible field net/minecraft/client/player/FirstPersonHandsAndItems offHandHeight F
+accessible field net/minecraft/client/player/FirstPersonHandsAndItems oOffHandHeight F
+#?}
+accessible field net/minecraft/world/entity/LivingEntity attackStrengthTicker I
+#? if >=1.21.6
+accessible method net/minecraft/client/gui/GuiGraphicsExtractor innerBlit (Lcom/mojang/renderpearl/api/pipeline/RenderPipeline;Lnet/minecraft/resources/Identifier;IIIIFFFFI)V
+#? if 1.21.4
+#accessible method net/minecraft/client/gui/GuiGraphicsExtractor innerBlit (Ljava/util/function/Function;Lnet/minecraft/resources/Identifier;IIIIFFFFI)V
+#? if 1.21.1
+#accessible method net/minecraft/client/gui/GuiGraphicsExtractor innerBlit (Lnet/minecraft/resources/Identifier;IIIIIFFFFFFFF)V
+#? if <26.3 {
+#accessible field net/minecraft/client/renderer/ItemInHandRenderer mainHandItem Lnet/minecraft/world/item/ItemStack;
+#accessible field net/minecraft/client/renderer/ItemInHandRenderer offHandItem Lnet/minecraft/world/item/ItemStack;
+#accessible field net/minecraft/client/renderer/ItemInHandRenderer mainHandHeight F
+#accessible field net/minecraft/client/renderer/ItemInHandRenderer oMainHandHeight F
+#accessible field net/minecraft/client/renderer/ItemInHandRenderer offHandHeight F
+#accessible field net/minecraft/client/renderer/ItemInHandRenderer oOffHandHeight F
+#?}
+accessible field net/minecraft/client/gui/screens/inventory/AbstractContainerScreen leftPos I
+accessible field net/minecraft/client/gui/screens/inventory/AbstractContainerScreen topPos I
+accessible field net/minecraft/world/inventory/AbstractContainerMenu dataSlots Ljava/util/List;
+accessible field net/minecraft/world/inventory/AbstractContainerMenu menuType Lnet/minecraft/world/inventory/MenuType;
+accessible method net/minecraft/client/gui/screens/MenuScreens getConstructor (Lnet/minecraft/world/inventory/MenuType;)Lnet/minecraft/client/gui/screens/MenuScreens$ScreenConstructor;
+#? if >=1.21.2
+accessible field net/minecraft/client/gui/screens/inventory/AbstractRecipeBookScreen recipeBookComponent Lnet/minecraft/client/gui/screens/recipebook/RecipeBookComponent;
+#? if >=26.3
+accessible field net/minecraft/client/gui/Gui guiRenderState Lnet/minecraft/client/renderer/state/gui/GuiRenderState;

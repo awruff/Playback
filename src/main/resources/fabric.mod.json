@@ -1,0 +1,25 @@
+{
+	"schemaVersion": 1,
+	"id": "${id}",
+	"version": "${version}",
+	"name": "${name}",
+	"license": "GPL-3.0-only",
+	"environment": "client",
+	"entrypoints": {
+		"client": [
+			"org.polyfrost.polyreplay.FirstPersonEffects"
+		]
+	},
+	"accessWidener": "polyreplay.accesswidener",
+	"mixins": [
+		"polyreplay.mixins.json"
+	],
+	"depends": {
+		"fabricloader": ">=0.15.10",
+		"minecraft": "${minecraft}",
+		"java": ">=${java_version}",
+		"fabric-api": "*",
+		"flashback": ">=${flashback}",
+		"oneconfigv1": ">=${oneconfig}"
+	}
+}

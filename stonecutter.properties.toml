@@ -1,0 +1,56 @@
+mod.id = "polyreplay"
+mod.name = "PolyReplay"
+mod.group = "org.polyfrost.polyreplay"
+mod.version = "0.1.0"
+
+deps.fabric_loader = "0.19.5"
+deps.oneconfig = "1.6.1"
+loomx.loom_version = "1.18-SNAPSHOT"
+
+["1.21.1"]
+mod.mc_compat = "1.21.1"
+deps.fabric_api = "0.116.17+1.21.1"
+deps.flashback = "nPzvTtsX"
+deps.flashback_min = "0.39.10"
+
+["1.21.4"]
+mod.mc_compat = "1.21.4"
+deps.fabric_api = "0.119.4+1.21.4"
+deps.flashback = "ifmZXBGO"
+deps.flashback_min = "0.39.10"
+
+["1.21.8"]
+mod.mc_compat = "1.21.8"
+deps.fabric_api = "0.136.1+1.21.8"
+deps.flashback = "FHcUcr9a"
+deps.flashback_min = "0.39.10"
+
+["1.21.10"]
+mod.mc_compat = "1.21.10"
+deps.fabric_api = "0.138.4+1.21.10"
+deps.flashback = "bogJfMGT"
+deps.flashback_min = "0.39.10"
+
+["1.21.11"]
+mod.mc_compat = "1.21.11"
+deps.fabric_api = "0.141.6+1.21.11"
+deps.flashback = "JTAZ57qO"
+deps.flashback_min = "0.39.10"
+
+["26.1"]
+mod.mc_compat = ">=26.1 <26.2"
+deps.fabric_api = "0.155.3+26.1.2"
+deps.flashback = "2obIELyD"
+deps.flashback_min = "0.43.3"
+
+["26.2"]
+mod.mc_compat = ">=26.2 <26.3"
+deps.fabric_api = "0.161.0+26.2"
+deps.flashback = "Um7qd3Na"
+deps.flashback_min = "0.43.6"
+
+["26.3"]
+mod.mc_compat = ">=26.3 <26.4"
+deps.fabric_api = "0.161.0+26.3"
+deps.flashback = "cV1pa0YV"
+deps.flashback_min = "0.43.6"
