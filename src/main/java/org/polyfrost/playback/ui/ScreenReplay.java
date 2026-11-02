@@ -6,6 +6,7 @@ import io.netty.buffer.Unpooled;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.navigation.ScreenRectangle;
+import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 //? if >=26.3 {
 import net.minecraft.client.renderer.state.gui.GuiElementRenderState;
 import org.joml.Matrix3x2f;
@@ -50,7 +51,7 @@ public class ScreenReplay {
             return;
         }
         List<Resolved> resolved = new ArrayList<>(payload.frames().size());
-        for (ScreenFramesAction.Frame frame : payload.frames()) {
+        for (ScreenCapture.Frame frame : payload.frames()) {
             if (frame.ops() != null) {
                 lastOps = decode(new RegistryFriendlyByteBuf(Unpooled.wrappedBuffer(frame.ops()), minecraft.level.registryAccess()), frame.guiWidth(), frame.guiHeight());
             }
@@ -74,12 +75,7 @@ public class ScreenReplay {
         if (!isShowing()) {
             return;
         }
-        Resolved frame = frames.getFirst();
-        for (Resolved candidate : frames) {
-            if (candidate.partial() <= partial) {
-                frame = candidate;
-            }
-        }
+        Resolved frame = ScreenCapture.latest(frames, Resolved::partial, partial);
         Minecraft minecraft = Minecraft.getInstance();
         float scale = (float) frame.guiScale() / (float) minecraft.getWindow().getGuiScale();
         float x = graphics.guiWidth() / 2.0f - frame.guiWidth() / 2.0f * scale;
@@ -180,7 +176,7 @@ public class ScreenReplay {
                         Minecraft minecraft = Minecraft.getInstance();
                         if (minecraft.level != null && minecraft.level.getEntity(entityId) instanceof LivingEntity entity) {
                             GuiCompat.push(g, s, x, y, pose);
-                            GuiCompat.entity(g, entity, x0, y0, x1, y1, size, offsetY, mouseX, mouseY);
+                            InventoryScreen.extractEntityInInventoryFollowsMouse(g, x0, y0, x1, y1, size, offsetY, mouseX, mouseY, entity);
                             GuiCompat.pop(g);
                         }
                     });
@@ -220,7 +216,7 @@ public class ScreenReplay {
 
     private static float[] readPose(RegistryFriendlyByteBuf buf) {
         return switch (buf.readByte()) {
-            case 0 -> new float[]{1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f};
+            case 0 -> ScreenCapture.IDENTITY;
             case 1 -> new float[]{1.0f, 0.0f, 0.0f, 1.0f, buf.readFloat(), buf.readFloat(), buf.readFloat()};
             default -> new float[]{buf.readFloat(), buf.readFloat(), buf.readFloat(), buf.readFloat(), buf.readFloat(), buf.readFloat(), buf.readFloat()};
         };
@@ -234,7 +230,7 @@ public class ScreenReplay {
         int hotX = system.hotX();
         int hotY = system.hotY();
         float scale = 1.0f / (float) Minecraft.getInstance().getWindow().getGuiScale();
-        GuiCompat.push(graphics, scale, x, y, new float[]{1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f});
+        GuiCompat.push(graphics, scale, x, y, ScreenCapture.IDENTITY);
         GuiCompat.blit(graphics, system.texture(), -hotX, system.width() - hotX, -hotY, system.height() - hotY, 0.0f, 1.0f, 0.0f, 1.0f, -1);
         GuiCompat.pop(graphics);
     }

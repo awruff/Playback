@@ -3,10 +3,10 @@ package org.polyfrost.playback.mixin;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.moulberry.flashback.Flashback;
-import com.moulberry.flashback.record.Recorder;
 import net.minecraft.client.Minecraft;
 import org.polyfrost.playback.shadow.ShadowReplayConfig;
 import org.polyfrost.playback.shadow.ShadowReplay;
+import org.polyfrost.playback.ui.ScreenCapture;
 import org.objectweb.asm.Opcodes;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -23,8 +23,7 @@ public abstract class MixinMinecraft {
 
     @WrapOperation(method = "runTick", at = @At(value = "FIELD", target = "Lnet/minecraft/client/Minecraft;pause:Z", opcode = Opcodes.PUTFIELD))
     private void playback$keepRecordingInMenus(Minecraft minecraft, boolean pause, Operation<Void> original) {
-        Recorder recorder = Flashback.RECORDER;
-        boolean recording = recorder != null && !recorder.isPaused() && !Flashback.isInReplay() && !ShadowReplay.isShadow(recorder);
+        boolean recording = ScreenCapture.recording() && !ShadowReplay.isShadow(Flashback.RECORDER);
         original.call(minecraft, pause && !(recording && ShadowReplayConfig.recordMenus));
     }
 

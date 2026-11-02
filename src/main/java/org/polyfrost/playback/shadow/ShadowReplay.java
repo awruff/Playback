@@ -202,7 +202,7 @@ public class ShadowReplay {
         }
         Path zip = replays.resolve(name + ".zip");
         try {
-            if (ShadowReplayZip.write(folder, zip, clip.start, clip.end, name) != null) {
+            if (ShadowReplayZip.write(folder, zip, clip.start, clip.end, name)) {
                 Minecraft.getInstance().execute(() -> {
                     Minecraft minecraft = Minecraft.getInstance();
                     if (minecraft.player != null) {

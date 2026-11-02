@@ -2,12 +2,9 @@ package org.polyfrost.playback.ui;
 
 import org.polyfrost.playback.Playback;
 
-import com.moulberry.flashback.Flashback;
 import com.moulberry.flashback.action.Action;
 import com.moulberry.flashback.io.AsyncReplaySaver;
-import com.moulberry.flashback.playback.ReplayPlayer;
 import com.moulberry.flashback.playback.ReplayServer;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.sounds.AbstractTickableSoundInstance;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
@@ -53,10 +50,7 @@ public class UiSoundAction implements Action {
 
     @Override
     public void handle(ReplayServer replayServer, RegistryFriendlyByteBuf buf) {
-        Payload payload = Payload.STREAM_CODEC.decode(buf);
-        for (ReplayPlayer viewer : replayServer.getReplayViewers()) {
-            ServerPlayNetworking.send(viewer, payload);
-        }
+        Playback.relay(replayServer, Payload.STREAM_CODEC.decode(buf));
     }
 
     public static void capture(SoundInstance instance) {
@@ -121,18 +115,12 @@ public class UiSoundAction implements Action {
         }
         Payload payload = new Payload(List.copyOf(pending));
         pending.clear();
-        for (AsyncReplaySaver saver : savers) {
-            saver.submit(writer -> {
-                writer.startAction(INSTANCE);
-                Payload.STREAM_CODEC.encode(writer.friendlyByteBuf(), payload);
-                writer.finishAction(INSTANCE);
-            });
-        }
+        Playback.submit(INSTANCE, buf -> Payload.STREAM_CODEC.encode(buf, payload), savers);
     }
 
     public static void play(Payload payload) {
         Minecraft minecraft = Minecraft.getInstance();
-        boolean hears = Flashback.isInReplay() && Playback.spectated() != null && minecraft.options.getCameraType().isFirstPerson();
+        boolean hears = Playback.spectated() != null && minecraft.options.getCameraType().isFirstPerson();
         for (Sound sound : payload.sounds()) {
             switch (sound.kind()) {
                 case ONE_SHOT -> {

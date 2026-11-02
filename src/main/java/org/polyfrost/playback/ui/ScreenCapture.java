@@ -6,6 +6,8 @@ import io.netty.buffer.Unpooled;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.navigation.ScreenRectangle;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
@@ -21,6 +23,7 @@ import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.Set;
 import java.util.List;
+import java.util.function.ToDoubleFunction;
 
 public class ScreenCapture {
 
@@ -35,7 +38,13 @@ public class ScreenCapture {
     public static final int BLUR = 8;
     public static final int MESH = 9;
 
-    public record Frame(float partial, float mouseX, float mouseY, int guiWidth, int guiHeight, int guiScale, boolean chat, byte[] ops) {
+    public static final float[] IDENTITY = {1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f};
+    private static final float COORDINATE_SCALE = 8.0f;
+
+    public record Frame(float partial, float mouseX, float mouseY, int guiWidth, int guiHeight, int guiScale, boolean chat, byte @Nullable [] ops) {
+    }
+
+    public record Sample(float partial, float x, float y) {
     }
 
     private static final List<Frame> frames = new ArrayList<>();
@@ -105,6 +114,17 @@ public class ScreenCapture {
         return a << 24 | r << 16 | g << 8 | b;
     }
 
+    public static void captureScreen(Screen screen, GuiGraphicsExtractor graphics, Runnable render) {
+        boolean capture = !ContainerScreenAction.recordMouse(screen) && recording();
+        if (capture) {
+            beginLayer(false);
+        }
+        render.run();
+        if (capture) {
+            endScreen(graphics, Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(false));
+        }
+    }
+
     public static void beginLayer(boolean isChat) {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.level == null) {
@@ -165,6 +185,26 @@ public class ScreenCapture {
         return minecraft.mouseHandler.getScaledYPos(minecraft.getWindow());
         //? if <1.21.8
         //return minecraft.mouseHandler.ypos() * minecraft.getWindow().getGuiScaledHeight() / minecraft.getWindow().getScreenHeight();
+    }
+
+    public static void writeSample(FriendlyByteBuf buf, float partial, float x, float y) {
+        buf.writeByte(Math.clamp(Math.round(partial * 255.0f), 0, 255));
+        buf.writeShort(Math.clamp(Math.round(x * COORDINATE_SCALE), Short.MIN_VALUE, Short.MAX_VALUE));
+        buf.writeShort(Math.clamp(Math.round(y * COORDINATE_SCALE), Short.MIN_VALUE, Short.MAX_VALUE));
+    }
+
+    public static Sample readSample(FriendlyByteBuf buf) {
+        return new Sample(buf.readUnsignedByte() / 255.0f, buf.readShort() / COORDINATE_SCALE, buf.readShort() / COORDINATE_SCALE);
+    }
+
+    public static <T> T latest(List<T> items, ToDoubleFunction<T> partialOf, float partial) {
+        T found = items.getFirst();
+        for (T item : items) {
+            if (partialOf.applyAsDouble(item) <= partial) {
+                found = item;
+            }
+        }
+        return found;
     }
 
     private static RegistryFriendlyByteBuf op(int type, float[] pose) {
@@ -239,7 +279,7 @@ public class ScreenCapture {
     }
 
     public static void marker(int type) {
-        op(type, new float[]{1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f});
+        op(type, IDENTITY);
     }
 
     public static void scissor(float[] pose, boolean on, int x0, int y0, int x1, int y1) {
@@ -266,7 +306,7 @@ public class ScreenCapture {
     }
 
     public static void mesh(int pipeline, int texture, boolean nearest, @Nullable ScreenRectangle scissor, int count, float[] data, int[] colors) {
-        RegistryFriendlyByteBuf buf = op(MESH, new float[]{1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f});
+        RegistryFriendlyByteBuf buf = op(MESH, IDENTITY);
         buf.writeByte(pipeline);
         buf.writeVarInt(texture + 1);
         buf.writeBoolean(nearest);

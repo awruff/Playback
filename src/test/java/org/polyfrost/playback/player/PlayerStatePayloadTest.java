@@ -1,5 +1,6 @@
 package org.polyfrost.playback.player;
 
+import org.polyfrost.playback.ui.ScreenCapture;
 import org.polyfrost.playback.ui.ScreenFramesAction;
 
 import io.netty.buffer.Unpooled;
@@ -39,26 +40,11 @@ class PlayerStatePayloadTest {
     }
 
     @Test
-    void readsPayloadWithoutGuiTicks() {
-        SharedConstants.tryDetectVersion();
-        Bootstrap.bootStrap();
-
-        var payload = new PlayerStateAction.Payload(42, 0.2f, 0.6f, 1.0f, 1.0f, null, null, 7, 12.5f, 0);
-        RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
-        PlayerStateAction.Payload.STREAM_CODEC.encode(buf, payload);
-        buf.writerIndex(buf.writerIndex() - 1);
-        PlayerStateAction.Payload decoded = PlayerStateAction.Payload.STREAM_CODEC.decode(buf);
-
-        assertEquals(0, buf.readableBytes());
-        assertEquals(-1, decoded.guiTicks());
-    }
-
-    @Test
     void roundTripsScreenFrames() {
         byte[] ops = {1, 2, 3, 4};
         var frames = List.of(
-            new ScreenFramesAction.Frame(0.25f, 120.5f, -4.125f, 427, 240, 2, true, ops),
-            new ScreenFramesAction.Frame(0.75f, 121.0f, -4.0f, 427, 240, 2, false, null));
+            new ScreenCapture.Frame(0.25f, 120.5f, -4.125f, 427, 240, 2, true, ops),
+            new ScreenCapture.Frame(0.75f, 121.0f, -4.0f, 427, 240, 2, false, null));
         var payload = new ScreenFramesAction.Payload(true, frames);
 
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
@@ -68,7 +54,7 @@ class PlayerStatePayloadTest {
         assertEquals(0, buf.readableBytes());
         assertTrue(decoded.open());
         assertEquals(2, decoded.frames().size());
-        ScreenFramesAction.Frame first = decoded.frames().get(0);
+        ScreenCapture.Frame first = decoded.frames().get(0);
         assertEquals(0.25f, first.partial(), 1.0f / 255.0f);
         assertEquals(120.5f, first.mouseX(), 1.0f / 8.0f);
         assertEquals(-4.125f, first.mouseY(), 1.0f / 8.0f);

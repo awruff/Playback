@@ -12,15 +12,14 @@ import com.mojang.renderpearl.api.textures.GpuSampler;
 import com.mojang.renderpearl.api.textures.GpuTextureView;
 import com.moulberry.flashback.action.Action;
 import com.moulberry.flashback.io.AsyncReplaySaver;
-import com.moulberry.flashback.playback.ReplayPlayer;
 import com.moulberry.flashback.playback.ReplayServer;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.client.gui.navigation.ScreenRectangle;
 import net.minecraft.client.gui.render.TextureSetup;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.state.gui.GuiElementRenderState;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
@@ -32,7 +31,7 @@ import org.lwjgl.system.MemoryUtil;
 import java.io.ByteArrayOutputStream;
 import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
@@ -70,10 +69,7 @@ public final class GuiMeshCapture implements Action {
 
     @Override
     public void handle(ReplayServer replayServer, RegistryFriendlyByteBuf buf) {
-        Payload payload = Payload.STREAM_CODEC.decode(buf);
-        for (ReplayPlayer viewer : replayServer.getReplayViewers()) {
-            ServerPlayNetworking.send(viewer, payload);
-        }
+        Playback.relay(replayServer, Payload.STREAM_CODEC.decode(buf));
     }
 
     public static void track(DynamicTexture texture) {
@@ -184,13 +180,7 @@ public final class GuiMeshCapture implements Action {
                 continue;
             }
             Payload payload = new Payload(id, pixels.getWidth(), pixels.getHeight(), deflate(bytes));
-            for (AsyncReplaySaver saver : savers) {
-                saver.submit(writer -> {
-                    writer.startAction(INSTANCE);
-                    Payload.write(writer.friendlyByteBuf(), payload);
-                    writer.finishAction(INSTANCE);
-                });
-            }
+            Playback.submit(INSTANCE, buf -> Payload.STREAM_CODEC.encode(buf, payload), savers);
         }
         used.clear();
         views.clear();
@@ -289,8 +279,8 @@ public final class GuiMeshCapture implements Action {
         @Override
         public VertexConsumer addVertex(float x, float y, float z) {
             if (this.count == this.colors.length) {
-                this.colors = java.util.Arrays.copyOf(this.colors, this.count * 2);
-                this.data = java.util.Arrays.copyOf(this.data, this.count * 8);
+                this.colors = Arrays.copyOf(this.colors, this.count * 2);
+                this.data = Arrays.copyOf(this.data, this.count * 8);
             }
             this.data[this.count * 4] = x;
             this.data[this.count * 4 + 1] = y;
@@ -349,15 +339,13 @@ public final class GuiMeshCapture implements Action {
 
     public record Payload(int id, int width, int height, byte[] pixels) implements CustomPacketPayload {
         public static final Type<Payload> TYPE = new Type<>(Identifier.fromNamespaceAndPath(Playback.MOD_ID, "gui_texture"));
-        public static final StreamCodec<RegistryFriendlyByteBuf, Payload> STREAM_CODEC = StreamCodec.of((buf, payload) -> write(buf, payload),
-            buf -> new Payload(buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readByteArray()));
-
-        private static void write(net.minecraft.network.FriendlyByteBuf buf, Payload payload) {
-            buf.writeVarInt(payload.id);
-            buf.writeVarInt(payload.width);
-            buf.writeVarInt(payload.height);
-            buf.writeByteArray(payload.pixels);
-        }
+        public static final StreamCodec<RegistryFriendlyByteBuf, Payload> STREAM_CODEC = StreamCodec.composite(
+            ByteBufCodecs.VAR_INT, Payload::id,
+            ByteBufCodecs.VAR_INT, Payload::width,
+            ByteBufCodecs.VAR_INT, Payload::height,
+            ByteBufCodecs.BYTE_ARRAY, Payload::pixels,
+            Payload::new
+        );
 
         @Override
         public Type<Payload> type() {

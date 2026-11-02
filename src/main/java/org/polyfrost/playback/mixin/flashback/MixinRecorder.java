@@ -7,6 +7,7 @@ import com.moulberry.flashback.io.AsyncReplaySaver;
 import com.moulberry.flashback.io.ReplayWriter;
 import com.moulberry.flashback.record.Recorder;
 import com.moulberry.flashback.record.ReplayMarker;
+import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.RegistryAccess;
@@ -88,7 +89,7 @@ public abstract class MixinRecorder implements ShadowRecorder {
 
     @Inject(method = "endTick", at = @At(value = "INVOKE", target = "Lcom/moulberry/flashback/record/Recorder;writeLocalData()V", shift = At.Shift.AFTER))
     private void playback$writeCameraTrack(boolean close, CallbackInfo ci) {
-        if ((Object) this != Flashback.RECORDER) {
+        if ((Object) this != Flashback.RECORDER || Minecraft.getInstance().level == null) {
             return;
         }
         Recorder shadow = ShadowReplay.teeTarget((Recorder) (Object) this);

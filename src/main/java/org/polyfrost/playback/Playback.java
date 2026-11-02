@@ -14,11 +14,17 @@ import org.polyfrost.playback.ui.ScreenReplay;
 import org.polyfrost.playback.ui.UiSoundAction;
 
 import com.moulberry.flashback.Flashback;
+import com.moulberry.flashback.action.Action;
 import com.moulberry.flashback.action.ActionRegistry;
+import com.moulberry.flashback.io.AsyncReplaySaver;
+import com.moulberry.flashback.playback.ReplayPlayer;
+import com.moulberry.flashback.playback.ReplayServer;
+import io.netty.buffer.Unpooled;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.client.player.AbstractClientPlayer;
@@ -26,6 +32,9 @@ import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.player.ItemActivation;
 //? if >=1.21.2
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
@@ -35,6 +44,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import org.jspecify.annotations.Nullable;
+
+import java.util.function.Consumer;
 
 public class Playback implements ClientModInitializer {
 
@@ -59,43 +70,51 @@ public class Playback implements ClientModInitializer {
         ActionRegistry.register(CameraTrackAction.INSTANCE);
         ActionRegistry.register(PlayerStateAction.INSTANCE);
         ActionRegistry.register(ScreenFramesAction.INSTANCE);
-        PayloadTypeRegistry.clientboundPlay().register(ScreenFramesAction.Payload.TYPE, ScreenFramesAction.Payload.STREAM_CODEC);
-        ClientPlayNetworking.registerGlobalReceiver(ScreenFramesAction.Payload.TYPE, (payload, context) -> {
-            if (Flashback.isInReplay()) {
-                ScreenReplay.accept(payload);
-            }
-        });
         ActionRegistry.register(ContainerScreenAction.INSTANCE);
-        PayloadTypeRegistry.clientboundPlay().register(ContainerScreenAction.Payload.TYPE, ContainerScreenAction.Payload.STREAM_CODEC);
-        ClientPlayNetworking.registerGlobalReceiver(ContainerScreenAction.Payload.TYPE, (payload, context) -> {
-            if (Flashback.isInReplay()) {
-                ContainerScreenAction.accept(payload);
-            }
-        });
-        //? if >=26.3 {
+        //? if >=26.3
         ActionRegistry.register(GuiMeshCapture.INSTANCE);
-        PayloadTypeRegistry.clientboundPlay().register(GuiMeshCapture.Payload.TYPE, GuiMeshCapture.Payload.STREAM_CODEC);
-        ClientPlayNetworking.registerGlobalReceiver(GuiMeshCapture.Payload.TYPE, (payload, context) -> {
-            if (Flashback.isInReplay()) {
-                GuiMeshCapture.accept(payload);
-            }
-        });
-        //?}
         ActionRegistry.register(UiSoundAction.INSTANCE);
-        PayloadTypeRegistry.clientboundPlay().register(UiSoundAction.Payload.TYPE, UiSoundAction.Payload.STREAM_CODEC);
-        ClientPlayNetworking.registerGlobalReceiver(UiSoundAction.Payload.TYPE, (payload, context) -> UiSoundAction.play(payload));
-        PayloadTypeRegistry.clientboundPlay().register(PlayerStateAction.Payload.TYPE, PlayerStateAction.Payload.STREAM_CODEC);
-        ClientPlayNetworking.registerGlobalReceiver(PlayerStateAction.Payload.TYPE, (payload, context) -> {
-            if (Flashback.isInReplay()) {
-                RecordedPlayerState.accept(payload);
-            }
-        });
-        PayloadTypeRegistry.clientboundPlay().register(CameraTrackAction.Flying.TYPE, CameraTrackAction.Flying.STREAM_CODEC);
-        ClientPlayNetworking.registerGlobalReceiver(CameraTrackAction.Flying.TYPE, (payload, context) -> {
-            if (Flashback.isInReplay() && context.client().level != null && context.client().level.getEntity(payload.entityId()) instanceof Player player) {
+        receive(ScreenFramesAction.Payload.TYPE, ScreenFramesAction.Payload.STREAM_CODEC, ScreenReplay::accept);
+        receive(ContainerScreenAction.Payload.TYPE, ContainerScreenAction.Payload.STREAM_CODEC, ContainerScreenAction::accept);
+        receive(UiSoundAction.Payload.TYPE, UiSoundAction.Payload.STREAM_CODEC, UiSoundAction::play);
+        receive(PlayerStateAction.Payload.TYPE, PlayerStateAction.Payload.STREAM_CODEC, RecordedPlayerState::accept);
+        receive(CameraTrackAction.Flying.TYPE, CameraTrackAction.Flying.STREAM_CODEC, payload -> {
+            Minecraft minecraft = Minecraft.getInstance();
+            if (minecraft.level != null && minecraft.level.getEntity(payload.entityId()) instanceof Player player) {
                 player.getAbilities().flying = payload.flying();
             }
         });
+        //? if >=26.3
+        receive(GuiMeshCapture.Payload.TYPE, GuiMeshCapture.Payload.STREAM_CODEC, GuiMeshCapture::accept);
+    }
+
+    private static <T extends CustomPacketPayload> void receive(CustomPacketPayload.Type<T> type, StreamCodec<? super RegistryFriendlyByteBuf, T> codec, Consumer<T> handler) {
+        PayloadTypeRegistry.clientboundPlay().register(type, codec);
+        ClientPlayNetworking.registerGlobalReceiver(type, (payload, context) -> {
+            if (Flashback.isInReplay()) {
+                handler.accept(payload);
+            }
+        });
+    }
+
+    public static void relay(ReplayServer replayServer, CustomPacketPayload payload) {
+        for (ReplayPlayer viewer : replayServer.getReplayViewers()) {
+            ServerPlayNetworking.send(viewer, payload);
+        }
+    }
+
+    public static void submit(Action action, Consumer<RegistryFriendlyByteBuf> encoder, AsyncReplaySaver... savers) {
+        RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), Minecraft.getInstance().level.registryAccess());
+        encoder.accept(buf);
+        byte[] bytes = new byte[buf.readableBytes()];
+        buf.readBytes(bytes);
+        for (AsyncReplaySaver saver : savers) {
+            saver.submit(writer -> {
+                writer.startAction(action);
+                writer.friendlyByteBuf().writeBytes(bytes);
+                writer.finishAction(action);
+            });
+        }
     }
 
     public static @Nullable AbstractClientPlayer spectated() {

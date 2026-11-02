@@ -1,14 +1,12 @@
 package org.polyfrost.playback.ui;
 
 import org.polyfrost.playback.Playback;
+import org.polyfrost.playback.ui.ScreenCapture.Frame;
+import org.polyfrost.playback.ui.ScreenCapture.Sample;
 
 import com.moulberry.flashback.action.Action;
 import com.moulberry.flashback.io.AsyncReplaySaver;
-import com.moulberry.flashback.playback.ReplayPlayer;
 import com.moulberry.flashback.playback.ReplayServer;
-import io.netty.buffer.Unpooled;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
-import net.minecraft.client.Minecraft;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -23,7 +21,6 @@ public class ScreenFramesAction implements Action {
 
     public static final ScreenFramesAction INSTANCE = new ScreenFramesAction();
     private static final Identifier NAME = Identifier.fromNamespaceAndPath(Playback.MOD_ID, "action/screen_frames_optional");
-    private static final float COORDINATE_SCALE = 8.0f;
 
     private static byte @Nullable [] lastOps;
     private static boolean wasOpen;
@@ -35,10 +32,7 @@ public class ScreenFramesAction implements Action {
 
     @Override
     public void handle(ReplayServer replayServer, RegistryFriendlyByteBuf buf) {
-        Payload payload = Payload.STREAM_CODEC.decode(buf);
-        for (ReplayPlayer viewer : replayServer.getReplayViewers()) {
-            ServerPlayNetworking.send(viewer, payload);
-        }
+        Playback.relay(replayServer, Payload.STREAM_CODEC.decode(buf));
     }
 
     public static void reset() {
@@ -48,41 +42,23 @@ public class ScreenFramesAction implements Action {
     }
 
     public static void write(boolean chunkStart, AsyncReplaySaver... savers) {
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.level == null) {
-            return;
-        }
         if (chunkStart) {
             lastOps = null;
         }
-        List<ScreenCapture.Frame> captured = ScreenCapture.take();
+        List<Frame> captured = ScreenCapture.take();
         if (captured.isEmpty() && !chunkStart && !wasOpen) {
             return;
         }
 
         List<Frame> frames = new ArrayList<>(captured.size());
-        for (ScreenCapture.Frame frame : captured) {
+        for (Frame frame : captured) {
             boolean same = lastOps != null && Arrays.equals(lastOps, frame.ops());
             lastOps = frame.ops();
-            frames.add(new Frame(frame.partial(), frame.mouseX(), frame.mouseY(), frame.guiWidth(), frame.guiHeight(), frame.guiScale(), frame.chat(),
-                same ? null : frame.ops()));
+            frames.add(same ? new Frame(frame.partial(), frame.mouseX(), frame.mouseY(), frame.guiWidth(), frame.guiHeight(), frame.guiScale(), frame.chat(), null) : frame);
         }
         wasOpen = !captured.isEmpty();
 
-        RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), minecraft.level.registryAccess());
-        Payload.STREAM_CODEC.encode(buf, new Payload(wasOpen, frames));
-        byte[] bytes = new byte[buf.readableBytes()];
-        buf.readBytes(bytes);
-        for (AsyncReplaySaver saver : savers) {
-            saver.submit(writer -> {
-                writer.startAction(INSTANCE);
-                writer.friendlyByteBuf().writeBytes(bytes);
-                writer.finishAction(INSTANCE);
-            });
-        }
-    }
-
-    public record Frame(float partial, float mouseX, float mouseY, int guiWidth, int guiHeight, int guiScale, boolean chat, byte @Nullable [] ops) {
+        Playback.submit(INSTANCE, buf -> Payload.STREAM_CODEC.encode(buf, new Payload(wasOpen, frames)), savers);
     }
 
     public record Payload(boolean open, List<Frame> frames) implements CustomPacketPayload {
@@ -101,16 +77,13 @@ public class ScreenFramesAction implements Action {
             }
             buf.writeVarInt(payload.frames.size());
             for (Frame frame : payload.frames) {
-                buf.writeByte(Math.clamp(Math.round(frame.partial * 255.0f), 0, 255));
-                buf.writeShort(Math.clamp(Math.round(frame.mouseX * COORDINATE_SCALE), Short.MIN_VALUE, Short.MAX_VALUE));
-                buf.writeShort(Math.clamp(Math.round(frame.mouseY * COORDINATE_SCALE), Short.MIN_VALUE, Short.MAX_VALUE));
-                buf.writeShort(frame.guiWidth);
-                buf.writeShort(frame.guiHeight);
-                buf.writeByte(frame.guiScale);
-                buf.writeByte((frame.chat ? 1 : 0) | (frame.ops != null ? 2 : 0));
-                if (frame.ops != null) {
-                    buf.writeVarInt(frame.ops.length);
-                    buf.writeBytes(frame.ops);
+                ScreenCapture.writeSample(buf, frame.partial(), frame.mouseX(), frame.mouseY());
+                buf.writeShort(frame.guiWidth());
+                buf.writeShort(frame.guiHeight());
+                buf.writeByte(frame.guiScale());
+                buf.writeByte((frame.chat() ? 1 : 0) | (frame.ops() != null ? 2 : 0));
+                if (frame.ops() != null) {
+                    buf.writeByteArray(frame.ops());
                 }
             }
         }
@@ -122,19 +95,13 @@ public class ScreenFramesAction implements Action {
             int count = buf.readVarInt();
             List<Frame> frames = new ArrayList<>(count);
             for (int i = 0; i < count; i++) {
-                float partial = buf.readUnsignedByte() / 255.0f;
-                float mouseX = buf.readShort() / COORDINATE_SCALE;
-                float mouseY = buf.readShort() / COORDINATE_SCALE;
+                Sample mouse = ScreenCapture.readSample(buf);
                 int guiWidth = buf.readShort();
                 int guiHeight = buf.readShort();
                 int guiScale = buf.readUnsignedByte();
                 int flags = buf.readByte();
-                byte[] ops = null;
-                if ((flags & 2) != 0) {
-                    ops = new byte[buf.readVarInt()];
-                    buf.readBytes(ops);
-                }
-                frames.add(new Frame(partial, mouseX, mouseY, guiWidth, guiHeight, guiScale, (flags & 1) != 0, ops));
+                byte[] ops = (flags & 2) != 0 ? buf.readByteArray() : null;
+                frames.add(new Frame(mouse.partial(), mouse.x(), mouse.y(), guiWidth, guiHeight, guiScale, (flags & 1) != 0, ops));
             }
             return new Payload(true, frames);
         }

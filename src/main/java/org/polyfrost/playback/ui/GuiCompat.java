@@ -4,10 +4,8 @@ import net.minecraft.client.Minecraft;
 //? if 1.21.4
 /*import net.minecraft.client.renderer.RenderType;*/
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
-import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
 //? if >=1.21.6 {
 import com.mojang.renderpearl.api.pipeline.RenderPipeline;
@@ -109,10 +107,6 @@ public class GuiCompat {
         graphics.item(stack, x, y);
         //?} else
         //graphics.renderItem(stack, x, y);
-    }
-
-    public static void entity(GuiGraphicsExtractor graphics, LivingEntity entity, int x0, int y0, int x1, int y1, int size, float offsetY, float mouseX, float mouseY) {
-        InventoryScreen.extractEntityInInventoryFollowsMouse(graphics, x0, y0, x1, y1, size, offsetY, mouseX, mouseY, entity);
     }
 
 }

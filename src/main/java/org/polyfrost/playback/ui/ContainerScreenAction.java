@@ -1,14 +1,12 @@
 package org.polyfrost.playback.ui;
 
 import org.polyfrost.playback.Playback;
+import org.polyfrost.playback.ui.ScreenCapture.Sample;
 
 import com.moulberry.flashback.Flashback;
 import com.moulberry.flashback.action.Action;
 import com.moulberry.flashback.io.AsyncReplaySaver;
-import com.moulberry.flashback.playback.ReplayPlayer;
 import com.moulberry.flashback.playback.ReplayServer;
-import io.netty.buffer.Unpooled;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.MenuScreens;
@@ -22,9 +20,11 @@ import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.ComponentSerialization;
+import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
@@ -37,12 +37,14 @@ import org.jspecify.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 public class ContainerScreenAction implements Action {
 
     public static final ContainerScreenAction INSTANCE = new ContainerScreenAction();
     private static final Identifier NAME = Identifier.fromNamespaceAndPath(Playback.MOD_ID, "action/container_screen_optional");
-    private static final float COORDINATE_SCALE = 8.0f;
+
+    private static final StreamCodec<RegistryFriendlyByteBuf, Optional<ItemStack>> OPTIONAL_ITEM = ByteBufCodecs.optional(ItemStack.OPTIONAL_STREAM_CODEC);
 
     private static final byte CLOSED = 0;
     private static final byte FULL = 1;
@@ -68,10 +70,7 @@ public class ContainerScreenAction implements Action {
 
     @Override
     public void handle(ReplayServer replayServer, RegistryFriendlyByteBuf buf) {
-        Payload payload = Payload.STREAM_CODEC.decode(buf);
-        for (ReplayPlayer viewer : replayServer.getReplayViewers()) {
-            ServerPlayNetworking.send(viewer, payload);
-        }
+        Playback.relay(replayServer, Payload.STREAM_CODEC.decode(buf));
     }
 
     public static boolean canRebuild(@Nullable Screen screen) {
@@ -115,9 +114,6 @@ public class ContainerScreenAction implements Action {
 
     public static void write(boolean chunkStart, AsyncReplaySaver... savers) {
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.level == null) {
-            return;
-        }
         Screen current = minecraft.gui.screen();
         Payload payload;
         if (!canRebuild(current)) {
@@ -164,17 +160,7 @@ public class ContainerScreenAction implements Action {
             wasOpen = true;
         }
 
-        RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), minecraft.level.registryAccess());
-        Payload.STREAM_CODEC.encode(buf, payload);
-        byte[] bytes = new byte[buf.readableBytes()];
-        buf.readBytes(bytes);
-        for (AsyncReplaySaver saver : savers) {
-            saver.submit(writer -> {
-                writer.startAction(INSTANCE);
-                writer.friendlyByteBuf().writeBytes(bytes);
-                writer.finishAction(INSTANCE);
-            });
-        }
+        Playback.submit(INSTANCE, buf -> Payload.STREAM_CODEC.encode(buf, payload), savers);
     }
 
     public static void accept(Payload payload) {
@@ -241,12 +227,11 @@ public class ContainerScreenAction implements Action {
         if (screen == null) {
             return;
         }
-        Minecraft minecraft = Minecraft.getInstance();
         if (screen.width != graphics.guiWidth() || screen.height != graphics.guiHeight()) {
             //? if >=1.21.11 {
             screen.init(graphics.guiWidth(), graphics.guiHeight());
             //?} else
-            //screen.init(minecraft, graphics.guiWidth(), graphics.guiHeight());
+            //screen.init(Minecraft.getInstance(), graphics.guiWidth(), graphics.guiHeight());
         }
 
         AbstractContainerMenu menu = screen.getMenu();
@@ -258,14 +243,9 @@ public class ContainerScreenAction implements Action {
         }
         menu.setCarried(model.carried);
 
-        Sample sample = replaySamples.isEmpty() ? new Sample(0.0f, -1000.0f, -1000.0f) : replaySamples.getFirst();
-        for (Sample candidate : replaySamples) {
-            if (candidate.partial <= partial) {
-                sample = candidate;
-            }
-        }
-        float mouseX = screen.leftPos + sample.x;
-        float mouseY = screen.topPos + sample.y;
+        Sample sample = replaySamples.isEmpty() ? new Sample(0.0f, -1000.0f, -1000.0f) : ScreenCapture.latest(replaySamples, Sample::partial, partial);
+        float mouseX = screen.leftPos + sample.x();
+        float mouseY = screen.topPos + sample.y();
         //? if >=1.21.10 {
         screen.extractRenderStateWithTooltipAndSubtitles(graphics, Math.round(mouseX), Math.round(mouseY), partial);
         //?} else
@@ -306,9 +286,6 @@ public class ContainerScreenAction implements Action {
     public record SlotChange(int index, ItemStack stack) {
     }
 
-    public record Sample(float partial, float x, float y) {
-    }
-
     public record Payload(byte mode, @Nullable Identifier menuType, Component title, List<SlotChange> slots, List<int[]> data,
                           @Nullable ItemStack carried, List<Sample> samples) implements CustomPacketPayload {
         public static final Type<Payload> TYPE = new Type<>(Identifier.fromNamespaceAndPath(Playback.MOD_ID, "container_screen"));
@@ -325,10 +302,7 @@ public class ContainerScreenAction implements Action {
                 return;
             }
             if (payload.mode == FULL) {
-                buf.writeBoolean(payload.menuType != null);
-                if (payload.menuType != null) {
-                    buf.writeIdentifier(payload.menuType);
-                }
+                buf.writeNullable(payload.menuType, FriendlyByteBuf::writeIdentifier);
                 ComponentSerialization.TRUSTED_STREAM_CODEC.encode(buf, payload.title);
             }
             buf.writeVarInt(payload.slots.size());
@@ -341,15 +315,10 @@ public class ContainerScreenAction implements Action {
                 buf.writeVarInt(change[0]);
                 buf.writeVarInt(change[1]);
             }
-            buf.writeBoolean(payload.carried != null);
-            if (payload.carried != null) {
-                ItemStack.OPTIONAL_STREAM_CODEC.encode(buf, payload.carried);
-            }
+            OPTIONAL_ITEM.encode(buf, Optional.ofNullable(payload.carried));
             buf.writeVarInt(payload.samples.size());
             for (Sample sample : payload.samples) {
-                buf.writeByte(Math.clamp(Math.round(sample.partial * 255.0f), 0, 255));
-                buf.writeShort(Math.clamp(Math.round(sample.x * COORDINATE_SCALE), Short.MIN_VALUE, Short.MAX_VALUE));
-                buf.writeShort(Math.clamp(Math.round(sample.y * COORDINATE_SCALE), Short.MIN_VALUE, Short.MAX_VALUE));
+                ScreenCapture.writeSample(buf, sample.partial(), sample.x(), sample.y());
             }
         }
 
@@ -361,9 +330,7 @@ public class ContainerScreenAction implements Action {
             Identifier type = null;
             Component title = Component.empty();
             if (mode == FULL) {
-                if (buf.readBoolean()) {
-                    type = buf.readIdentifier();
-                }
+                type = buf.readNullable(FriendlyByteBuf::readIdentifier);
                 title = ComponentSerialization.TRUSTED_STREAM_CODEC.decode(buf);
             }
             int slotCount = buf.readVarInt();
@@ -376,11 +343,11 @@ public class ContainerScreenAction implements Action {
             for (int i = 0; i < dataCount; i++) {
                 data.add(new int[]{buf.readVarInt(), buf.readVarInt()});
             }
-            ItemStack carried = buf.readBoolean() ? ItemStack.OPTIONAL_STREAM_CODEC.decode(buf) : null;
+            ItemStack carried = OPTIONAL_ITEM.decode(buf).orElse(null);
             int sampleCount = buf.readVarInt();
             List<Sample> samples = new ArrayList<>(sampleCount);
             for (int i = 0; i < sampleCount; i++) {
-                samples.add(new Sample(buf.readUnsignedByte() / 255.0f, buf.readShort() / COORDINATE_SCALE, buf.readShort() / COORDINATE_SCALE));
+                samples.add(ScreenCapture.readSample(buf));
             }
             return new Payload(mode, type, title, slots, data, carried, samples);
         }

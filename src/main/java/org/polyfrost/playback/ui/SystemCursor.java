@@ -11,6 +11,7 @@ import org.jspecify.annotations.Nullable;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
@@ -29,7 +30,7 @@ public class SystemCursor {
     public record Loaded(Identifier texture, int width, int height, int hotX, int hotY) {
     }
 
-    private record Raw(int width, int height, int hotX, int hotY, int[] argb) {
+    private record Raw(NativeImage image, int hotX, int hotY) {
     }
 
     private static boolean tried;
@@ -62,23 +63,21 @@ public class SystemCursor {
     }
 
     private static Loaded register(Raw raw) {
-        NativeImage image = new NativeImage(raw.width(), raw.height(), false);
-        for (int y = 0; y < raw.height(); y++) {
-            for (int x = 0; x < raw.width(); x++) {
-                int argb = raw.argb()[y * raw.width() + x];
-                //? if >=1.21.4 {
-                image.setPixel(x, y, argb);
-                //?} else
-                //image.setPixelRGBA(x, y, (argb & 0xFF00FF00) | ((argb & 0xFF) << 16) | ((argb >> 16) & 0xFF));
-            }
-        }
+        NativeImage image = raw.image();
         //? if >=1.21.5 {
         DynamicTexture texture = new DynamicTexture(() -> "playback cursor", image);
         //?} else
         //DynamicTexture texture = new DynamicTexture(image);
         Identifier id = Identifier.fromNamespaceAndPath(Playback.MOD_ID, "system_cursor");
         Minecraft.getInstance().getTextureManager().register(id, texture);
-        return new Loaded(id, raw.width(), raw.height(), raw.hotX(), raw.hotY());
+        return new Loaded(id, image.getWidth(), image.getHeight(), raw.hotX(), raw.hotY());
+    }
+
+    private static void setArgb(NativeImage image, int x, int y, int argb) {
+        //? if >=1.21.4 {
+        image.setPixel(x, y, argb);
+        //?} else
+        //image.setPixelRGBA(x, y, (argb & 0xFF00FF00) | ((argb & 0xFF) << 16) | ((argb >> 16) & 0xFF));
     }
 
     private static @Nullable Raw readXcursor() throws IOException {
@@ -157,14 +156,14 @@ public class SystemCursor {
         }
         int width = buf.getInt(best + 16);
         int height = buf.getInt(best + 20);
-        int[] argb = new int[width * height];
-        for (int i = 0; i < argb.length; i++) {
+        NativeImage image = new NativeImage(width, height, false);
+        for (int i = 0; i < width * height; i++) {
             int premultiplied = buf.getInt(best + 36 + i * 4);
             int alpha = premultiplied >>> 24;
-            argb[i] = alpha == 0 || alpha == 255 ? premultiplied : (alpha << 24) | (unpremultiply(premultiplied >> 16, alpha) << 16)
-                | (unpremultiply(premultiplied >> 8, alpha) << 8) | unpremultiply(premultiplied, alpha);
+            setArgb(image, i % width, i / width, alpha == 0 || alpha == 255 ? premultiplied : (alpha << 24) | (unpremultiply(premultiplied >> 16, alpha) << 16)
+                | (unpremultiply(premultiplied >> 8, alpha) << 8) | unpremultiply(premultiplied, alpha));
         }
-        return new Raw(width, height, buf.getInt(best + 24), buf.getInt(best + 28), argb);
+        return new Raw(image, buf.getInt(best + 24), buf.getInt(best + 28));
     }
 
     private static int unpremultiply(int channel, int alpha) {
@@ -225,20 +224,7 @@ public class SystemCursor {
         int length = buf.getInt(best + 8);
         int offset = buf.getInt(best + 12);
         if (buf.getInt(offset) == 0x474E5089) {
-            try (NativeImage png = NativeImage.read(new ByteArrayInputStream(data, offset, length))) {
-                int[] argb = new int[png.getWidth() * png.getHeight()];
-                for (int y = 0; y < png.getHeight(); y++) {
-                    for (int x = 0; x < png.getWidth(); x++) {
-                        //? if >=1.21.4 {
-                        argb[y * png.getWidth() + x] = png.getPixel(x, y);
-                        //?} else {
-                        /*int abgr = png.getPixelRGBA(x, y);
-                        argb[y * png.getWidth() + x] = (abgr & 0xFF00FF00) | ((abgr & 0xFF) << 16) | ((abgr >> 16) & 0xFF);
-                        *///?}
-                    }
-                }
-                return new Raw(png.getWidth(), png.getHeight(), hotX, hotY, argb);
-            }
+            return new Raw(NativeImage.read(new ByteArrayInputStream(data, offset, length)), hotX, hotY);
         }
         int width = buf.getInt(offset + 4);
         int height = buf.getInt(offset + 8) / 2;
@@ -246,13 +232,13 @@ public class SystemCursor {
             return null;
         }
         int pixels = offset + buf.getInt(offset);
-        int[] argb = new int[width * height];
+        NativeImage image = new NativeImage(width, height, false);
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
-                argb[y * width + x] = buf.getInt(pixels + ((height - 1 - y) * width + x) * 4);
+                setArgb(image, x, y, buf.getInt(pixels + ((height - 1 - y) * width + x) * 4));
             }
         }
-        return new Raw(width, height, hotX, hotY, argb);
+        return new Raw(image, hotX, hotY);
     }
 
     private static @Nullable Raw readMac() throws IOException {
@@ -269,19 +255,8 @@ public class SystemCursor {
                     hotX = (int) (plistNumber(plist, "hotx") * scale);
                     hotY = (int) (plistNumber(plist, "hoty") * scale);
                 }
-                try (NativeImage png = NativeImage.read(Files.newInputStream(file))) {
-                    int[] argb = new int[png.getWidth() * png.getHeight()];
-                    for (int y = 0; y < png.getHeight(); y++) {
-                        for (int x = 0; x < png.getWidth(); x++) {
-                            //? if >=1.21.4 {
-                            argb[y * png.getWidth() + x] = png.getPixel(x, y);
-                            //?} else {
-                            /*int abgr = png.getPixelRGBA(x, y);
-                            argb[y * png.getWidth() + x] = (abgr & 0xFF00FF00) | ((abgr & 0xFF) << 16) | ((abgr >> 16) & 0xFF);
-                            *///?}
-                        }
-                    }
-                    return new Raw(png.getWidth(), png.getHeight(), hotX, hotY, argb);
+                try (InputStream in = Files.newInputStream(file)) {
+                    return new Raw(NativeImage.read(in), hotX, hotY);
                 }
             }
         }

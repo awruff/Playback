@@ -4,10 +4,7 @@ import org.polyfrost.playback.Playback;
 
 import com.moulberry.flashback.action.Action;
 import com.moulberry.flashback.io.AsyncReplaySaver;
-import com.moulberry.flashback.playback.ReplayPlayer;
 import com.moulberry.flashback.playback.ReplayServer;
-import io.netty.buffer.Unpooled;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.client.Minecraft;
 //? if >=26.3 {
 import net.minecraft.client.player.FirstPersonHandsAndItems;
@@ -15,7 +12,7 @@ import net.minecraft.client.player.FirstPersonHandsAndItems;
 //import net.minecraft.client.renderer.ItemInHandRenderer;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.chat.ComponentSerialization;
+import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
@@ -23,14 +20,14 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.item.ItemStack;
 import org.jspecify.annotations.Nullable;
 
+import java.util.Optional;
+
 public class PlayerStateAction implements Action {
 
     public static final PlayerStateAction INSTANCE = new PlayerStateAction();
     private static final Identifier NAME = Identifier.fromNamespaceAndPath(Playback.MOD_ID, "action/player_state_optional");
 
-    private static final byte SCREEN_UNCHANGED = 0;
-    private static final byte SCREEN_OPENED = 2;
-    private static final byte SCREEN_UPDATED = 3;
+    private static final StreamCodec<RegistryFriendlyByteBuf, Optional<ItemStack>> OPTIONAL_ITEM = ByteBufCodecs.optional(ItemStack.OPTIONAL_STREAM_CODEC);
 
     private static @Nullable Payload lastWritten;
     private static @Nullable ItemStack lastMainHandItem;
@@ -44,10 +41,7 @@ public class PlayerStateAction implements Action {
 
     @Override
     public void handle(ReplayServer replayServer, RegistryFriendlyByteBuf buf) {
-        Payload payload = Payload.STREAM_CODEC.decode(buf);
-        for (ReplayPlayer viewer : replayServer.getReplayViewers()) {
-            ServerPlayNetworking.send(viewer, payload);
-        }
+        Playback.relay(replayServer, Payload.STREAM_CODEC.decode(buf));
     }
 
     public static void reset() {
@@ -60,7 +54,7 @@ public class PlayerStateAction implements Action {
     public static void write(boolean chunkStart, AsyncReplaySaver... savers) {
         Minecraft minecraft = Minecraft.getInstance();
         LocalPlayer player = minecraft.player;
-        if (player == null || minecraft.level == null) {
+        if (player == null) {
             return;
         }
         if (chunkStart) {
@@ -89,17 +83,7 @@ public class PlayerStateAction implements Action {
         }
         lastWritten = payload;
 
-        RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), minecraft.level.registryAccess());
-        Payload.STREAM_CODEC.encode(buf, payload);
-        byte[] bytes = new byte[buf.readableBytes()];
-        buf.readBytes(bytes);
-        for (AsyncReplaySaver saver : savers) {
-            saver.submit(writer -> {
-                writer.startAction(INSTANCE);
-                writer.friendlyByteBuf().writeBytes(bytes);
-                writer.finishAction(INSTANCE);
-            });
-        }
+        Playback.submit(INSTANCE, buf -> Payload.STREAM_CODEC.encode(buf, payload), savers);
     }
 
     private static boolean changed(@Nullable ItemStack last, ItemStack current) {
@@ -136,11 +120,11 @@ public class PlayerStateAction implements Action {
             buf.writeByte(Math.round(payload.mainHandHeight * 255.0f));
             buf.writeByte(Math.round(payload.oOffHandHeight * 255.0f));
             buf.writeByte(Math.round(payload.offHandHeight * 255.0f));
-            writeOptionalItem(buf, payload.mainHandItem);
-            writeOptionalItem(buf, payload.offHandItem);
+            OPTIONAL_ITEM.encode(buf, Optional.ofNullable(payload.mainHandItem));
+            OPTIONAL_ITEM.encode(buf, Optional.ofNullable(payload.offHandItem));
             buf.writeVarInt(payload.attackTicker);
             buf.writeFloat(payload.attackDelay);
-            buf.writeByte(SCREEN_UNCHANGED);
+            buf.writeByte(0);
             buf.writeVarInt(payload.guiTicks);
         }
 
@@ -150,60 +134,12 @@ public class PlayerStateAction implements Action {
             float mainHandHeight = buf.readUnsignedByte() / 255.0f;
             float oOffHandHeight = buf.readUnsignedByte() / 255.0f;
             float offHandHeight = buf.readUnsignedByte() / 255.0f;
-            ItemStack mainHandItem = readOptionalItem(buf);
-            ItemStack offHandItem = readOptionalItem(buf);
+            ItemStack mainHandItem = OPTIONAL_ITEM.decode(buf).orElse(null);
+            ItemStack offHandItem = OPTIONAL_ITEM.decode(buf).orElse(null);
             int attackTicker = buf.readVarInt();
             float attackDelay = buf.readFloat();
-
-            byte screenMode = buf.readByte();
-            if (screenMode == SCREEN_OPENED) {
-                buf.readByte();
-                buf.readNullable(b -> b.readIdentifier());
-                ComponentSerialization.TRUSTED_STREAM_CODEC.decode(buf);
-            }
-            if (screenMode == SCREEN_OPENED || screenMode == SCREEN_UPDATED) {
-                skipLegacyScreen(buf);
-            }
-            int guiTicks = buf.isReadable() ? buf.readVarInt() : -1;
-            return new Payload(entityId, oMainHandHeight, mainHandHeight, oOffHandHeight, offHandHeight, mainHandItem, offHandItem, attackTicker, attackDelay, guiTicks);
-        }
-
-        private static void skipLegacyScreen(RegistryFriendlyByteBuf buf) {
-            buf.readNullable(b -> {
-                b.readNullable(b2 -> b2.readIdentifier());
-                b.readFloat();
-                b.readUtf();
-                b.readVarInt();
-                return b.readVarInt();
-            });
-            int slotCount = buf.readVarInt();
-            for (int i = 0; i < slotCount; i++) {
-                buf.readVarInt();
-                ItemStack.OPTIONAL_STREAM_CODEC.decode(buf);
-            }
-            int dataCount = buf.readVarInt();
-            for (int i = 0; i < dataCount; i++) {
-                buf.readVarInt();
-                buf.readVarInt();
-            }
-            readOptionalItem(buf);
-            int cursorCount = buf.readVarInt();
-            for (int i = 0; i < cursorCount; i++) {
-                buf.readUnsignedByte();
-                buf.readShort();
-                buf.readShort();
-            }
-        }
-
-        private static void writeOptionalItem(RegistryFriendlyByteBuf buf, @Nullable ItemStack item) {
-            buf.writeBoolean(item != null);
-            if (item != null) {
-                ItemStack.OPTIONAL_STREAM_CODEC.encode(buf, item);
-            }
-        }
-
-        private static @Nullable ItemStack readOptionalItem(RegistryFriendlyByteBuf buf) {
-            return buf.readBoolean() ? ItemStack.OPTIONAL_STREAM_CODEC.decode(buf) : null;
+            buf.readByte();
+            return new Payload(entityId, oMainHandHeight, mainHandHeight, oOffHandHeight, offHandHeight, mainHandItem, offHandItem, attackTicker, attackDelay, buf.readVarInt());
         }
     }
 

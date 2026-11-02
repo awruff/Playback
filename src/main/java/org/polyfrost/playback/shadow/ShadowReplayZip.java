@@ -36,6 +36,7 @@ public class ShadowReplayZip {
         List<String> chunks = new ArrayList<>();
         int offset = 0;
         int tick = 0;
+        int total = 0;
         for (Map.Entry<String, Integer> chunk : durations.entrySet()) {
             int chunkEnd = tick + chunk.getValue();
             if (chunkEnd > start && tick < end) {
@@ -43,27 +44,20 @@ public class ShadowReplayZip {
                     offset = tick;
                 }
                 chunks.add(chunk.getKey());
+                total += chunk.getValue();
             }
             tick = chunkEnd;
         }
-        return chunks.isEmpty() ? null : new Span(chunks, offset, sum(durations, chunks));
+        return chunks.isEmpty() ? null : new Span(chunks, offset, total);
     }
 
-    private static int sum(Map<String, Integer> durations, List<String> chunks) {
-        int total = 0;
-        for (String chunk : chunks) {
-            total += durations.get(chunk);
-        }
-        return total;
-    }
-
-    public static @Nullable Span write(Path recording, Path zip, int start, int end, String name) throws IOException {
+    public static boolean write(Path recording, Path zip, int start, int end, String name) throws IOException {
         JsonObject meta = readMeta(recording.resolve("metadata.json"));
         if (meta == null) {
             meta = readMeta(recording.resolve("metadata.json.old"));
         }
         if (meta == null || !meta.has("chunks")) {
-            return null;
+            return false;
         }
         JsonObject chunksJson = meta.getAsJsonObject("chunks");
         Map<String, Integer> durations = new LinkedHashMap<>();
@@ -74,7 +68,7 @@ public class ShadowReplayZip {
         }
         Span span = span(durations, start, end);
         if (span == null) {
-            return null;
+            return false;
         }
 
         JsonObject keptChunks = new JsonObject();
@@ -118,7 +112,7 @@ public class ShadowReplayZip {
                 copy(out, recording.resolve(chunk), chunk);
             }
         }
-        return span;
+        return true;
     }
 
     private static void copy(ZipOutputStream out, Path file, String name) throws IOException {

@@ -3,8 +3,6 @@ package org.polyfrost.playback.mixin;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import com.moulberry.flashback.Flashback;
-import com.moulberry.flashback.record.Recorder;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -17,7 +15,6 @@ import net.minecraft.world.effect.MobEffect;
 import org.polyfrost.playback.camera.CameraTrackAction;
 import org.polyfrost.playback.Playback;
 import org.polyfrost.playback.player.RecordedPlayerState;
-import org.polyfrost.playback.ui.ContainerScreenAction;
 import org.polyfrost.playback.ui.ScreenCapture;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -41,8 +38,7 @@ public abstract class MixinGameRenderer {
     //? if <26.2
     //boolean tick,
     CallbackInfo ci) {
-        Recorder recorder = Flashback.RECORDER;
-        if (recorder != null && !recorder.isPaused() && !Flashback.isInReplay() && this.minecraft.player != null) {
+        if (ScreenCapture.recording() && this.minecraft.player != null) {
             CameraTrackAction.sample(this.minecraft.player, deltaTracker.getGameTimeDeltaPartialTick(true));
         }
     }
@@ -50,34 +46,21 @@ public abstract class MixinGameRenderer {
     //? if 26.1 {
     /*@WrapOperation(method = "extractGui", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/screens/Screen;extractRenderStateWithTooltipAndSubtitles(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V"))
     private void playback$captureScreen(Screen screen, GuiGraphicsExtractor graphics, int mouseX, int mouseY, float tickDelta, Operation<Void> original) {
-        this.playback$capture(screen, graphics, mouseX, mouseY, tickDelta, original);
+        ScreenCapture.captureScreen(screen, graphics, () -> original.call(screen, graphics, mouseX, mouseY, tickDelta));
     }
     *///?}
 
     //? if >=1.21.10 && <26.1 {
     /*@WrapOperation(method = "extractRenderState", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/screens/Screen;extractRenderStateWithTooltipAndSubtitles(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V"))
     private void playback$captureScreen(Screen screen, GuiGraphicsExtractor graphics, int mouseX, int mouseY, float tickDelta, Operation<Void> original) {
-        this.playback$capture(screen, graphics, mouseX, mouseY, tickDelta, original);
+        ScreenCapture.captureScreen(screen, graphics, () -> original.call(screen, graphics, mouseX, mouseY, tickDelta));
     }
     *///?}
 
     //? if <1.21.10 {
     /*@WrapOperation(method = "extractRenderState", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/screens/Screen;renderWithTooltip(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V"))
     private void playback$captureScreen(Screen screen, GuiGraphicsExtractor graphics, int mouseX, int mouseY, float tickDelta, Operation<Void> original) {
-        this.playback$capture(screen, graphics, mouseX, mouseY, tickDelta, original);
-    }
-    *///?}
-
-    //? if <26.2 {
-    /*private void playback$capture(Screen screen, GuiGraphicsExtractor graphics, int mouseX, int mouseY, float tickDelta, Operation<Void> original) {
-        boolean capture = !ContainerScreenAction.recordMouse(screen) && ScreenCapture.recording();
-        if (capture) {
-            ScreenCapture.beginLayer(false);
-        }
-        original.call(screen, graphics, mouseX, mouseY, tickDelta);
-        if (capture) {
-            ScreenCapture.endScreen(graphics, this.minecraft.getDeltaTracker().getGameTimeDeltaPartialTick(false));
-        }
+        ScreenCapture.captureScreen(screen, graphics, () -> original.call(screen, graphics, mouseX, mouseY, tickDelta));
     }
     *///?}
 

@@ -6,10 +6,7 @@ import com.moulberry.flashback.Flashback;
 import com.moulberry.flashback.action.Action;
 import com.moulberry.flashback.io.AsyncReplaySaver;
 import com.moulberry.flashback.packet.FlashbackAccurateEntityPosition;
-import com.moulberry.flashback.playback.ReplayPlayer;
 import com.moulberry.flashback.playback.ReplayServer;
-import io.netty.buffer.Unpooled;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.FriendlyByteBuf;
@@ -45,11 +42,9 @@ public class CameraTrackAction implements Action {
         Flying flying = new Flying(track.entityId(), track.flying());
         FlashbackAccurateEntityPosition positions = Flashback.getConfig().advanced.disableIncreasedFirstPersonUpdates ? null
             : new FlashbackAccurateEntityPosition(track.entityId(), track.resample(PLAYBACK_STEPS));
-        for (ReplayPlayer viewer : replayServer.getReplayViewers()) {
-            ServerPlayNetworking.send(viewer, flying);
-            if (positions != null) {
-                ServerPlayNetworking.send(viewer, positions);
-            }
+        Playback.relay(replayServer, flying);
+        if (positions != null) {
+            Playback.relay(replayServer, positions);
         }
     }
 
@@ -87,17 +82,7 @@ public class CameraTrackAction implements Action {
             pitches[i] = samples.get(i)[2];
         }
 
-        FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
-        new CameraTrack(player.getId(), player.getAbilities().flying, start, end, partials, yaws, pitches).encode(buf);
-        byte[] bytes = new byte[buf.readableBytes()];
-        buf.readBytes(bytes);
-        for (AsyncReplaySaver saver : savers) {
-            saver.submit(writer -> {
-                writer.startAction(INSTANCE);
-                writer.friendlyByteBuf().writeBytes(bytes);
-                writer.finishAction(INSTANCE);
-            });
-        }
+        Playback.submit(INSTANCE, new CameraTrack(player.getId(), player.getAbilities().flying, start, end, partials, yaws, pitches)::encode, savers);
 
         List<float[]> carried = new ArrayList<>(samples.subList(Math.max(0, count - 2), count));
         samples.clear();
