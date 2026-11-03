@@ -67,7 +67,7 @@ java {
 val mixinClasses = buildList {
     addAll(listOf("MixinAbstractSelectionList", "MixinAbstractWidget", "MixinClientPacketListener", "MixinGameRenderer", "MixinGuiGraphicsExtractor", "MixinHud", "MixinInventoryScreen",
         "MixinMinecraft", "MixinPanorama", "MixinPauseScreen", "MixinPlayer", "MixinSoundManager"))
-    addAll(listOf("AsyncReplaySaverAccessor", "MixinFlashback", "MixinRecorder", "MixinReplayGamePacketHandler").map { "flashback.$it" })
+    addAll(listOf("AsyncReplaySaverAccessor", "MixinFlashback", "MixinRecorder", "MixinReplayGamePacketHandler", "MixinReplayPlayer", "MixinReplayServer").map { "flashback.$it" })
     if (sc.current.parsed < "1.21.6") addAll(listOf("MixinFont", "MixinHudRenderCallback", "MixinLayeredDraw"))
     if (sc.current.parsed >= "26.1") add("MixinCamera")
     if (sc.current.parsed >= "26.2") add("MixinGui")

@@ -4,6 +4,7 @@ import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.network.protocol.game.ClientboundDamageEventPacket;
 import net.minecraft.network.protocol.game.ClientboundEntityEventPacket;
+import net.minecraft.network.protocol.game.ClientboundSetCameraPacket;
 import net.minecraft.world.entity.EntityEvent;
 import org.polyfrost.playback.shadow.AutoMarkers;
 import org.polyfrost.playback.Playback;
@@ -37,6 +38,11 @@ public abstract class MixinClientPacketListener {
     *///?}
     private void playback$autoMarkDamage(ClientboundDamageEventPacket packet, CallbackInfo ci) {
         AutoMarkers.onDamage(packet.entityId());
+    }
+
+    @Inject(method = "handleSetCamera", at = @At("TAIL"))
+    private void playback$retryUnknownCamera(ClientboundSetCameraPacket packet, CallbackInfo ci) {
+        Playback.setPendingCamera(packet.cameraId);
     }
 
 }

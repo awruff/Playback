@@ -40,12 +40,16 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import org.jspecify.annotations.Nullable;
 
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 import java.util.function.Consumer;
 
 public class Playback implements ClientModInitializer {
@@ -58,6 +62,8 @@ public class Playback implements ClientModInitializer {
     private static @Nullable AbstractClientPlayer tracked;
     private static float portalIntensity;
     private static float oPortalIntensity;
+    private static int pendingCamera = -1;
+    public static final Map<UUID, UUID> RESPECTATE = new HashMap<>();
     //? if >=26.3 {
     private static float spinningTime;
     private static float spinningSpeed;
@@ -143,6 +149,7 @@ public class Playback implements ClientModInitializer {
             //? if >=26.3
             GuiMeshCapture.clearReplay();
         }
+        attachPendingCamera();
         AbstractClientPlayer player = spectated();
         if (player == null || player.level().tickRateManager().isEntityFrozen(player)) {
             return;
@@ -173,6 +180,24 @@ public class Playback implements ClientModInitializer {
         ITEM_ACTIVATION.tick();
         //?}
         RecordedPlayerState.tickGuiTicks();
+    }
+
+    public static void setPendingCamera(int entityId) {
+        Minecraft minecraft = Minecraft.getInstance();
+        pendingCamera = Flashback.isInReplay() && minecraft.level != null && minecraft.level.getEntity(entityId) == null ? entityId : -1;
+    }
+
+    private static void attachPendingCamera() {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (pendingCamera == -1 || !Flashback.isInReplay() || minecraft.level == null) {
+            pendingCamera = -1;
+            return;
+        }
+        Entity entity = minecraft.level.getEntity(pendingCamera);
+        if (entity != null) {
+            minecraft.setCameraEntity(entity);
+            pendingCamera = -1;
+        }
     }
 
     public static float portalIntensity(float partialTick) {

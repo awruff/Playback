@@ -17,6 +17,7 @@ accessible method net/minecraft/client/gui/Hud extractSpyglassOverlay (Lnet/mine
 #accessible method net/minecraft/client/gui/Gui extractSpyglassOverlay (Lnet/minecraft/client/gui/GuiGraphicsExtractor;F)V
 #? if <26.1
 #accessible method net/minecraft/client/gui/Gui renderSpyglassOverlay (Lnet/minecraft/client/gui/GuiGraphics;F)V
+accessible field net/minecraft/network/protocol/game/ClientboundSetCameraPacket cameraId I
 #? if >=1.21.6
 accessible method net/minecraft/client/gui/GuiGraphicsExtractor innerBlit (Lcom/mojang/renderpearl/api/pipeline/RenderPipeline;Lnet/minecraft/resources/Identifier;IIIIFFFFI)V
 #? if 1.21.4
