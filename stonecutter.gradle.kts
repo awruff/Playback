@@ -37,6 +37,7 @@ stonecutter parameters {
             replace("clientboundPlay()", "playS2C()")
             replace("extractRenderStateWithTooltipAndSubtitles", "renderWithTooltipAndSubtitles")
             replace("\"extractRenderState\"", "\"render\"")
+            replace("\"extractItem\"", "\"renderItem\"")
             replace("extractCameraOverlays", "renderCameraOverlays")
             replace("extractEffects", "renderEffects")
             replace("extractItemHotbar", "renderItemHotbar")

@@ -20,7 +20,9 @@ import java.util.List;
 public class ScreenFramesAction implements Action {
 
     public static final ScreenFramesAction INSTANCE = new ScreenFramesAction();
-    private static final Identifier NAME = Identifier.fromNamespaceAndPath(Playback.MOD_ID, "action/screen_frames_optional");
+    private static final Identifier NAME = Identifier.fromNamespaceAndPath(Playback.MOD_ID, "action/screen_frames_v2_optional");
+
+    private static final int OPS = 0x80;
 
     private static byte @Nullable [] lastOps;
     private static boolean wasOpen;
@@ -54,7 +56,7 @@ public class ScreenFramesAction implements Action {
         for (Frame frame : captured) {
             boolean same = lastOps != null && Arrays.equals(lastOps, frame.ops());
             lastOps = frame.ops();
-            frames.add(same ? new Frame(frame.partial(), frame.mouseX(), frame.mouseY(), frame.guiWidth(), frame.guiHeight(), frame.guiScale(), frame.chat(), null) : frame);
+            frames.add(same ? frame.withoutOps() : frame);
         }
         wasOpen = !captured.isEmpty();
 
@@ -81,7 +83,7 @@ public class ScreenFramesAction implements Action {
                 buf.writeShort(frame.guiWidth());
                 buf.writeShort(frame.guiHeight());
                 buf.writeByte(frame.guiScale());
-                buf.writeByte((frame.chat() ? 1 : 0) | (frame.ops() != null ? 2 : 0));
+                buf.writeByte(frame.flags() | (frame.ops() != null ? OPS : 0));
                 if (frame.ops() != null) {
                     buf.writeByteArray(frame.ops());
                 }
@@ -99,9 +101,9 @@ public class ScreenFramesAction implements Action {
                 int guiWidth = buf.readShort();
                 int guiHeight = buf.readShort();
                 int guiScale = buf.readUnsignedByte();
-                int flags = buf.readByte();
-                byte[] ops = (flags & 2) != 0 ? buf.readByteArray() : null;
-                frames.add(new Frame(mouse.partial(), mouse.x(), mouse.y(), guiWidth, guiHeight, guiScale, (flags & 1) != 0, ops));
+                int flags = buf.readUnsignedByte();
+                byte[] ops = (flags & OPS) != 0 ? buf.readByteArray() : null;
+                frames.add(new Frame(mouse.partial(), mouse.x(), mouse.y(), guiWidth, guiHeight, guiScale, flags & ~OPS, ops));
             }
             return new Payload(true, frames);
         }

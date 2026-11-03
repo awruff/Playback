@@ -43,8 +43,8 @@ class PlayerStatePayloadTest {
     void roundTripsScreenFrames() {
         byte[] ops = {1, 2, 3, 4};
         var frames = List.of(
-            new ScreenCapture.Frame(0.25f, 120.5f, -4.125f, 427, 240, 2, true, ops),
-            new ScreenCapture.Frame(0.75f, 121.0f, -4.0f, 427, 240, 2, false, null));
+            new ScreenCapture.Frame(0.25f, 120.5f, -4.125f, 427, 240, 2, ScreenCapture.Frame.CHAT | ScreenCapture.Frame.SCREEN, ops),
+            new ScreenCapture.Frame(0.75f, 121.0f, -4.0f, 427, 240, 2, 0, null));
         var payload = new ScreenFramesAction.Payload(true, frames);
 
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
@@ -60,9 +60,10 @@ class PlayerStatePayloadTest {
         assertEquals(-4.125f, first.mouseY(), 1.0f / 8.0f);
         assertEquals(427, first.guiWidth());
         assertEquals(2, first.guiScale());
-        assertTrue(first.chat());
+        assertTrue(first.has(ScreenCapture.Frame.CHAT));
+        assertTrue(first.has(ScreenCapture.Frame.SCREEN));
         assertArrayEquals(ops, first.ops());
-        assertFalse(decoded.frames().get(1).chat());
+        assertFalse(decoded.frames().get(1).has(ScreenCapture.Frame.CHAT));
         assertNull(decoded.frames().get(1).ops());
     }
 

@@ -17,8 +17,10 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.item.ItemStack;
 import org.jspecify.annotations.Nullable;
+import org.polyfrost.playback.Playback;
 
 import java.util.ArrayList;
+import java.util.BitSet;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.Set;
@@ -37,11 +39,29 @@ public class ScreenCapture {
     public static final int STRATUM = 7;
     public static final int BLUR = 8;
     public static final int MESH = 9;
+    public static final int PANORAMA = 10;
+    public static final int GROUP = 12;
+    public static final int GROUP_END = 13;
+    public static final int SPYGLASS = 14;
+
+    public static final int GROUP_PLAIN = 0;
+    public static final int GROUP_TOOLTIP = 1;
 
     public static final float[] IDENTITY = {1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f};
     private static final float COORDINATE_SCALE = 8.0f;
 
-    public record Frame(float partial, float mouseX, float mouseY, int guiWidth, int guiHeight, int guiScale, boolean chat, byte @Nullable [] ops) {
+    public record Frame(float partial, float mouseX, float mouseY, int guiWidth, int guiHeight, int guiScale, int flags, byte @Nullable [] ops) {
+        public static final int CHAT = 1;
+        public static final int SCREEN = 2;
+        public static final int HUD = 4;
+
+        public boolean has(int flag) {
+            return (this.flags & flag) != 0;
+        }
+
+        public Frame withoutOps() {
+            return new Frame(this.partial, this.mouseX, this.mouseY, this.guiWidth, this.guiHeight, this.guiScale, this.flags, null);
+        }
     }
 
     public record Sample(float partial, float x, float y) {
@@ -51,7 +71,12 @@ public class ScreenCapture {
     private static @Nullable RegistryFriendlyByteBuf body;
     private static int count;
     private static boolean active;
-    private static boolean chat;
+    private static int flags;
+    private static int blitKind = -1;
+    private static final BitSet groups = new BitSet();
+    private static int groupDepth;
+    public static boolean disconnecting;
+    private static boolean panorama;
     private static final Set<Object> shadowStates = Collections.newSetFromMap(new IdentityHashMap<>());
     private static float offsetX;
     private static float offsetY;
@@ -121,20 +146,27 @@ public class ScreenCapture {
         }
         render.run();
         if (capture) {
-            endScreen(graphics, Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(false));
+            endScreen();
         }
     }
 
     public static void beginLayer(boolean isChat) {
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.level == null) {
+        beginLayer(isChat ? Frame.CHAT : 0);
+    }
+
+    public static void beginHudLayer() {
+        beginLayer(Frame.HUD);
+    }
+
+    private static void beginLayer(int flag) {
+        if (Playback.registries == null) {
             return;
         }
         if (body == null) {
-            body = new RegistryFriendlyByteBuf(Unpooled.buffer(), minecraft.level.registryAccess());
+            body = new RegistryFriendlyByteBuf(Unpooled.buffer(), Playback.registries);
             count = 0;
         }
-        chat |= isChat;
+        flags |= flag;
         active = true;
     }
 
@@ -142,22 +174,78 @@ public class ScreenCapture {
         active = false;
     }
 
-    public static void endScreen(GuiGraphicsExtractor graphics, float partial) {
+    public static void endScreen() {
+        flags |= Frame.SCREEN;
+        //? if >=26.3 {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (active() && minecraft.level == null && !panorama) {
+            panorama(-minecraft.gameRenderer.panorama().spin);
+        }
+        //?}
         active = false;
-        if (body == null) {
+    }
+
+    public static void captureHud(Runnable render) {
+        if (!recording()) {
+            render.run();
             return;
         }
+        boolean started = !active();
+        if (started) {
+            beginHudLayer();
+        }
+        beginGroup(GROUP_PLAIN);
+        try {
+            render.run();
+        } finally {
+            endGroup();
+            if (started) {
+                endLayer();
+            }
+        }
+    }
+
+    public static void withBlitKind(int kind, Runnable render) {
+        int previous = blitKind;
+        blitKind = kind;
+        try {
+            render.run();
+        } finally {
+            blitKind = previous;
+        }
+    }
+
+    public static void spyglass(float scale, Runnable render) {
+        op(SPYGLASS, IDENTITY).writeFloat(scale);
+        active = false;
+        try {
+            render.run();
+        } finally {
+            active = true;
+        }
+    }
+
+    public static void endFrame() {
         Minecraft minecraft = Minecraft.getInstance();
+        float partial = minecraft.getDeltaTracker().getGameTimeDeltaPartialTick(false);
+        panorama = false;
+        active = false;
+        groups.clear();
+        groupDepth = 0;
+        if (body == null) {
+            flags = 0;
+            return;
+        }
         RegistryFriendlyByteBuf out = new RegistryFriendlyByteBuf(Unpooled.buffer(), body.registryAccess());
         out.writeVarInt(count);
         out.writeBytes(body);
         byte[] ops = new byte[out.readableBytes()];
         out.readBytes(ops);
-        frames.add(new Frame(partial, (float) mouseX(minecraft), (float) mouseY(minecraft), graphics.guiWidth(), graphics.guiHeight(),
-            (int) minecraft.getWindow().getGuiScale(), chat, ops));
+        frames.add(new Frame(partial, (float) mouseX(minecraft), (float) mouseY(minecraft), minecraft.getWindow().getGuiScaledWidth(), minecraft.getWindow().getGuiScaledHeight(),
+            (int) minecraft.getWindow().getGuiScale(), flags, ops));
         body.release();
         body = null;
-        chat = false;
+        flags = 0;
     }
 
     public static List<Frame> take() {
@@ -170,7 +258,10 @@ public class ScreenCapture {
         frames.clear();
         body = null;
         active = false;
-        chat = false;
+        panorama = false;
+        flags = 0;
+        groups.clear();
+        groupDepth = 0;
     }
 
     public static double mouseX(Minecraft minecraft) {
@@ -232,6 +323,50 @@ public class ScreenCapture {
         return buf;
     }
 
+    public static void beginGroup(int kind, float[] pose, float x0, float y0, float x1, float y1) {
+        if (beginGroup(kind, true)) {
+            float minX = Float.MAX_VALUE, minY = Float.MAX_VALUE, maxX = -Float.MAX_VALUE, maxY = -Float.MAX_VALUE;
+            for (int corner = 0; corner < 4; corner++) {
+                float x = (corner & 1) == 0 ? x0 : x1;
+                float y = (corner & 2) == 0 ? y0 : y1;
+                float px = pose[0] * x + pose[2] * y + pose[4] + offsetX;
+                float py = pose[1] * x + pose[3] * y + pose[5] + offsetY;
+                minX = Math.min(minX, px);
+                minY = Math.min(minY, py);
+                maxX = Math.max(maxX, px);
+                maxY = Math.max(maxY, py);
+            }
+            body.writeFloat(minX);
+            body.writeFloat(minY);
+            body.writeFloat(maxX);
+            body.writeFloat(maxY);
+        }
+    }
+
+    public static void beginGroup(int kind) {
+        beginGroup(kind, false);
+    }
+
+    private static boolean beginGroup(int kind, boolean rect) {
+        boolean written = active();
+        groups.set(groupDepth++, written);
+        if (written) {
+            RegistryFriendlyByteBuf buf = op(GROUP, IDENTITY);
+            buf.writeByte(kind);
+            buf.writeBoolean(rect);
+        }
+        return written;
+    }
+
+    public static void endGroup() {
+        if (groupDepth == 0) {
+            return;
+        }
+        if (groups.get(--groupDepth) && active()) {
+            op(GROUP_END, IDENTITY);
+        }
+    }
+
     public static void fill(float[] pose, int kind, int x0, int y0, int x1, int y1, int color1, int color2) {
         RegistryFriendlyByteBuf buf = op(FILL, pose);
         buf.writeByte(kind);
@@ -245,7 +380,7 @@ public class ScreenCapture {
 
     public static void blit(float[] pose, int kind, Identifier texture, int x0, int x1, int y0, int y1, float u0, float u1, float v0, float v1, int color) {
         RegistryFriendlyByteBuf buf = op(BLIT, pose);
-        buf.writeByte(kind);
+        buf.writeByte(blitKind >= 0 ? blitKind : kind);
         buf.writeIdentifier(texture);
         buf.writeShort(x0);
         buf.writeShort(x1);
@@ -280,6 +415,11 @@ public class ScreenCapture {
 
     public static void marker(int type) {
         op(type, IDENTITY);
+    }
+
+    public static void panorama(float spin) {
+        op(PANORAMA, IDENTITY).writeFloat(spin);
+        panorama = true;
     }
 
     public static void scissor(float[] pose, boolean on, int x0, int y0, int x1, int y1) {

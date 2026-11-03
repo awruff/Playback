@@ -65,13 +65,15 @@ java {
 }
 
 val mixinClasses = buildList {
-    addAll(listOf("MixinClientPacketListener", "MixinGameRenderer", "MixinGuiGraphicsExtractor", "MixinHud", "MixinInventoryScreen",
-        "MixinMinecraft", "MixinPauseScreen", "MixinPlayer", "MixinSoundManager"))
+    addAll(listOf("MixinAbstractSelectionList", "MixinAbstractWidget", "MixinClientPacketListener", "MixinGameRenderer", "MixinGuiGraphicsExtractor", "MixinHud", "MixinInventoryScreen",
+        "MixinMinecraft", "MixinPanorama", "MixinPauseScreen", "MixinPlayer", "MixinSoundManager"))
     addAll(listOf("AsyncReplaySaverAccessor", "MixinFlashback", "MixinRecorder", "MixinReplayGamePacketHandler").map { "flashback.$it" })
-    if (sc.current.parsed < "1.21.6") add("MixinFont")
+    if (sc.current.parsed < "1.21.6") addAll(listOf("MixinFont", "MixinHudRenderCallback", "MixinLayeredDraw"))
     if (sc.current.parsed >= "26.1") add("MixinCamera")
     if (sc.current.parsed >= "26.2") add("MixinGui")
     if (sc.current.parsed >= "26.3") addAll(listOf("MixinLevelExtractor", "MixinGuiRenderState", "MixinDynamicTexture", "MixinLayerOp"))
+    if (sc.current.parsed >= "1.21.6") add("MixinHudRootLayer")
+    if (sc.current.parsed < "26.2") add("MixinGameRendererHud")
     if (sc.current.parsed >= "1.21.11") add("MixinRenderingTextCollector")
     sort()
 }

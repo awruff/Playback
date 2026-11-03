@@ -1,6 +1,8 @@
 classTweaker v1 official
 
 #? if >=26.3 {
+accessible field net/minecraft/client/renderer/Panorama spin F
+accessible field net/minecraft/client/renderer/texture/AbstractTexture textureView Lcom/mojang/renderpearl/api/textures/GpuTextureView;
 accessible field net/minecraft/client/player/FirstPersonHandsAndItems mainHandItem Lnet/minecraft/world/item/ItemStack;
 accessible field net/minecraft/client/player/FirstPersonHandsAndItems offHandItem Lnet/minecraft/world/item/ItemStack;
 accessible field net/minecraft/client/player/FirstPersonHandsAndItems mainHandHeight F
@@ -9,6 +11,12 @@ accessible field net/minecraft/client/player/FirstPersonHandsAndItems offHandHei
 accessible field net/minecraft/client/player/FirstPersonHandsAndItems oOffHandHeight F
 #?}
 accessible field net/minecraft/world/entity/LivingEntity attackStrengthTicker I
+#? if >=26.2
+accessible method net/minecraft/client/gui/Hud extractSpyglassOverlay (Lnet/minecraft/client/gui/GuiGraphicsExtractor;F)V
+#? if >=26.1 && <26.2
+#accessible method net/minecraft/client/gui/Gui extractSpyglassOverlay (Lnet/minecraft/client/gui/GuiGraphicsExtractor;F)V
+#? if <26.1
+#accessible method net/minecraft/client/gui/Gui renderSpyglassOverlay (Lnet/minecraft/client/gui/GuiGraphics;F)V
 #? if >=1.21.6
 accessible method net/minecraft/client/gui/GuiGraphicsExtractor innerBlit (Lcom/mojang/renderpearl/api/pipeline/RenderPipeline;Lnet/minecraft/resources/Identifier;IIIIFFFFI)V
 #? if 1.21.4
@@ -32,3 +40,5 @@ accessible method net/minecraft/client/gui/screens/MenuScreens getConstructor (L
 accessible field net/minecraft/client/gui/screens/inventory/AbstractRecipeBookScreen recipeBookComponent Lnet/minecraft/client/gui/screens/recipebook/RecipeBookComponent;
 #? if >=26.3
 accessible field net/minecraft/client/gui/Gui guiRenderState Lnet/minecraft/client/renderer/state/gui/GuiRenderState;
+#? if >=1.21.10
+accessible class net/minecraft/client/gui/components/AbstractSelectionList$Entry

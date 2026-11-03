@@ -153,7 +153,7 @@ public final class GuiMeshCapture implements Action {
         }
         DynamicTexture found = null;
         for (DynamicTexture texture : dynamicTextures) {
-            if (texture.getTextureView() == view) {
+            if (texture.textureView == view) {
                 found = texture;
                 break;
             }

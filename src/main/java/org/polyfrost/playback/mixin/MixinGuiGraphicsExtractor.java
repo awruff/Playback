@@ -1,6 +1,11 @@
 package org.polyfrost.playback.mixin;
 
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipComponent;
+import net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipPositioner;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
@@ -14,7 +19,6 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 //? if >=1.21.6 {
 import com.mojang.renderpearl.api.pipeline.RenderPipeline;
-import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.render.TextureSetup;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.util.FormattedCharSequence;
@@ -22,8 +26,12 @@ import net.minecraft.util.FormattedCharSequence;
 //import net.minecraft.client.renderer.RenderType;
 //? if 1.21.4
 //import java.util.function.Function;
+//? if 1.21.1
+//import com.mojang.blaze3d.systems.RenderSystem;
 //? if >=26.1
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+
+import java.util.List;
 
 @Mixin(GuiGraphicsExtractor.class)
 public abstract class MixinGuiGraphicsExtractor {
@@ -40,7 +48,7 @@ public abstract class MixinGuiGraphicsExtractor {
     @Inject(method = "innerBlit(Lcom/mojang/renderpearl/api/pipeline/RenderPipeline;Lnet/minecraft/resources/Identifier;IIIIFFFFI)V", at = @At("HEAD"))
     private void playback$blit(RenderPipeline pipeline, Identifier location, int x0, int x1, int y0, int y1, float u0, float u1, float v0, float v1, int color, CallbackInfo ci) {
         if (ScreenCapture.active((GuiGraphicsExtractor) (Object) this)) {
-            ScreenCapture.blit(GuiCompat.pose((GuiGraphicsExtractor) (Object) this), 0, location, x0, x1, y0, y1, u0, u1, v0, v1, color);
+            ScreenCapture.blit(GuiCompat.pose((GuiGraphicsExtractor) (Object) this), GuiCompat.blitKind(pipeline), location, x0, x1, y0, y1, u0, u1, v0, v1, color);
         }
     }
 
@@ -132,7 +140,9 @@ public abstract class MixinGuiGraphicsExtractor {
         if (ScreenCapture.active()) {
             float[] pose = GuiCompat.pose((GuiGraphicsExtractor) (Object) this);
             pose[6] += z;
-            ScreenCapture.blit(pose, 0, texture, x0, x1, y0, y1, u0, u1, v0, v1, -1);
+            float[] shader = RenderSystem.getShaderColor();
+            int color = (Math.round(shader[3] * 255.0f) << 24) | (Math.round(shader[0] * 255.0f) << 16) | (Math.round(shader[1] * 255.0f) << 8) | Math.round(shader[2] * 255.0f);
+            ScreenCapture.blit(pose, 0, texture, x0, x1, y0, y1, u0, u1, v0, v1, color);
         }
     }
 
@@ -151,7 +161,7 @@ public abstract class MixinGuiGraphicsExtractor {
     /*@Inject(method = "innerBlit(Ljava/util/function/Function;Lnet/minecraft/resources/Identifier;IIIIFFFFI)V", at = @At("HEAD"))
     private void playback$blit(Function<Identifier, RenderType> type, Identifier texture, int x0, int x1, int y0, int y1, float u0, float u1, float v0, float v1, int color, CallbackInfo ci) {
         if (ScreenCapture.active()) {
-            ScreenCapture.blit(GuiCompat.pose((GuiGraphicsExtractor) (Object) this), 0, texture, x0, x1, y0, y1, u0, u1, v0, v1, color);
+            ScreenCapture.blit(GuiCompat.pose((GuiGraphicsExtractor) (Object) this), GuiCompat.blitKind(type, texture), texture, x0, x1, y0, y1, u0, u1, v0, v1, color);
         }
     }
     *///?}
@@ -171,10 +181,51 @@ public abstract class MixinGuiGraphicsExtractor {
             for (int tileY = 0; tileY < height; tileY += tileHeight) {
                 int h = Math.min(tileHeight, height - tileY);
                 float v1 = sprite.getV((float) (textureY + h) / spriteHeight);
-                ScreenCapture.blit(pose, 0, sprite.atlasLocation(), x + tileX, x + tileX + w, y + tileY, y + tileY + h, u0, u1, v0, v1, color);
+                ScreenCapture.blit(pose, GuiCompat.blitKind(pipeline), sprite.atlasLocation(), x + tileX, x + tileX + w, y + tileY, y + tileY + h, u0, u1, v0, v1, color);
             }
         }
     }
     //?}
+
+    //? if >=26.3 {
+    @WrapMethod(method = "tooltip")
+    private void playback$captureTooltipGroup(Font font, List<ClientTooltipComponent> lines, int x, int y, ClientTooltipPositioner positioner, @Nullable Identifier style, boolean extraSpaceAfterFirstLine, Operation<Void> original) {
+        this.playback$tooltipGroup(() -> original.call(font, lines, x, y, positioner, style, extraSpaceAfterFirstLine));
+    }
+    //?} elif >=26.1 {
+    /*@WrapMethod(method = "tooltip")
+    private void playback$captureTooltipGroup(Font font, List<ClientTooltipComponent> lines, int x, int y, ClientTooltipPositioner positioner, @Nullable Identifier style, Operation<Void> original) {
+        this.playback$tooltipGroup(() -> original.call(font, lines, x, y, positioner, style));
+    }
+    *///?} elif >=1.21.6 {
+    /*@WrapMethod(method = "renderTooltip(Lnet/minecraft/client/gui/Font;Ljava/util/List;IILnet/minecraft/client/gui/screens/inventory/tooltip/ClientTooltipPositioner;Lnet/minecraft/resources/Identifier;)V")
+    private void playback$captureTooltipGroup(Font font, List<ClientTooltipComponent> lines, int x, int y, ClientTooltipPositioner positioner, @Nullable Identifier style, Operation<Void> original) {
+        this.playback$tooltipGroup(() -> original.call(font, lines, x, y, positioner, style));
+    }
+    *///?} elif 1.21.4 {
+    /*@WrapMethod(method = "renderTooltipInternal")
+    private void playback$captureTooltipGroup(Font font, List<ClientTooltipComponent> lines, int x, int y, ClientTooltipPositioner positioner, @Nullable Identifier style, Operation<Void> original) {
+        this.playback$tooltipGroup(() -> original.call(font, lines, x, y, positioner, style));
+    }
+    *///?} else {
+    /*@WrapMethod(method = "renderTooltipInternal")
+    private void playback$captureTooltipGroup(Font font, List<ClientTooltipComponent> lines, int x, int y, ClientTooltipPositioner positioner, Operation<Void> original) {
+        this.playback$tooltipGroup(() -> original.call(font, lines, x, y, positioner));
+    }
+    *///?}
+
+    private void playback$tooltipGroup(Runnable render) {
+        boolean group = ScreenCapture.active((GuiGraphicsExtractor) (Object) this);
+        if (group) {
+            ScreenCapture.beginGroup(ScreenCapture.GROUP_TOOLTIP);
+        }
+        try {
+            render.run();
+        } finally {
+            if (group) {
+                ScreenCapture.endGroup();
+            }
+        }
+    }
 
 }

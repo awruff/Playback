@@ -41,12 +41,14 @@ public abstract class MixinLayerOp {
         boolean nested = ScreenCapture.inShadow();
         GuiRenderState state = new GuiRenderState();
         float[] previous = ScreenCapture.pushShadow(state, this.bounds.left(), this.bounds.top(), this.alpha);
+        ScreenCapture.beginGroup(ScreenCapture.GROUP_PLAIN, ScreenCapture.IDENTITY, 0, 0, this.bounds.width(), this.bounds.height());
         try {
             GuiGraphicsExtractor shadow = new GuiGraphicsExtractor(Minecraft.getInstance(), state, 0, 0);
             for (Function1<GuiGraphicsExtractor, Unit> op : this.ops) {
                 op.invoke(shadow);
             }
         } finally {
+            ScreenCapture.endGroup();
             ScreenCapture.popShadow(state, previous);
         }
         if (nested) {

@@ -16,6 +16,7 @@ import net.minecraft.network.protocol.Packet;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
+import org.polyfrost.playback.Playback;
 import org.polyfrost.playback.camera.CameraTrackAction;
 import org.polyfrost.playback.ui.ContainerScreenAction;
 import org.polyfrost.playback.player.PlayerStateAction;
@@ -78,6 +79,7 @@ public abstract class MixinRecorder implements ShadowRecorder {
 
     @Inject(method = "<init>", at = @At("RETURN"))
     private void playback$resetCameraTrack(RegistryAccess registryAccess, CallbackInfo ci) {
+        Playback.registries = registryAccess;
         CameraTrackAction.reset();
         PlayerStateAction.reset();
         ScreenFramesAction.reset();
@@ -190,6 +192,7 @@ public abstract class MixinRecorder implements ShadowRecorder {
 
     @Inject(method = "setRegistryAccess", at = @At("HEAD"))
     private void playback$teeRegistryAccess(RegistryAccess registryAccess, CallbackInfo ci) {
+        Playback.registries = registryAccess;
         Recorder shadow = ShadowReplay.teeTarget((Recorder) (Object) this);
         if (shadow != null) {
             shadow.setRegistryAccess(registryAccess);

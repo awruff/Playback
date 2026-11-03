@@ -32,6 +32,9 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+//? if <1.21.2
+//import net.minecraft.world.entity.Entity;
+
 import java.util.Collection;
 
 @Mixin(Hud.class)
@@ -140,8 +143,16 @@ public abstract class MixinHud {
         return recorded >= 0 ? recorded : original;
     }
 
-    @Inject(method = "extractRenderState", at = @At("TAIL"))
-    private void playback$extractRecordedScreen(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker, CallbackInfo ci) {
+    @WrapMethod(method = "extractRenderState")
+    private void playback$captureHud(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker, Operation<Void> original) {
+        if (!ScreenReplay.hidesHud()) {
+            ScreenCapture.captureHud(() -> original.call(graphics, deltaTracker));
+        } else {
+            //? if >=26.3 {
+            Minecraft minecraft = Minecraft.getInstance();
+            minecraft.gameRenderer.gameRenderState().guiRenderState.isHudHidden = minecraft.gui.hud.isHidden();
+            //?}
+        }
         ScreenReplay.render(graphics, deltaTracker.getGameTimeDeltaPartialTick(true));
         ContainerScreenAction.render(graphics, deltaTracker.getGameTimeDeltaPartialTick(true));
     }
@@ -153,16 +164,44 @@ public abstract class MixinHud {
         }
     }
 
+    //? if >=26.1 {
+    @WrapMethod(method = "extractSpyglassOverlay")
+    //?} else
+    //@WrapMethod(method = "renderSpyglassOverlay")
+    private void playback$captureSpyglass(GuiGraphicsExtractor graphics, float scale, Operation<Void> original) {
+        if (ScreenCapture.active(graphics)) {
+            ScreenCapture.spyglass(scale, () -> original.call(graphics, scale));
+        } else {
+            original.call(graphics, scale);
+        }
+    }
+
+    //? if <1.21.2 {
+    /*@WrapMethod(method = "renderCrosshair")
+    private void playback$captureCrosshairBlend(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker, Operation<Void> original) {
+        ScreenCapture.withBlitKind(1, () -> original.call(graphics, deltaTracker));
+    }
+
+    @WrapMethod(method = "renderVignette")
+    private void playback$captureVignetteBlend(GuiGraphicsExtractor graphics, Entity camera, Operation<Void> original) {
+        ScreenCapture.withBlitKind(2, () -> original.call(graphics, camera));
+    }
+    *///?}
+
     @WrapMethod(method = "extractChat")
     private void playback$captureChat(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker, Operation<Void> original) {
         Minecraft minecraft = Minecraft.getInstance();
         boolean capture = ScreenCapture.recording() && minecraft.gui.screen() instanceof ChatScreen;
+        boolean started = capture && !ScreenCapture.active();
         if (capture) {
             ScreenCapture.beginLayer(true);
         }
-        original.call(graphics, deltaTracker);
-        if (capture) {
-            ScreenCapture.endLayer();
+        try {
+            original.call(graphics, deltaTracker);
+        } finally {
+            if (started) {
+                ScreenCapture.endLayer();
+            }
         }
     }
 

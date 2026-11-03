@@ -28,6 +28,7 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.client.player.AbstractClientPlayer;
+import net.minecraft.core.RegistryAccess;
 //? if >=26.3
 import net.minecraft.client.player.ItemActivation;
 //? if >=1.21.2
@@ -53,6 +54,7 @@ public class Playback implements ClientModInitializer {
     //? if >=26.3
     public static final ItemActivation ITEM_ACTIVATION = new ItemActivation();
 
+    public static @Nullable RegistryAccess registries;
     private static @Nullable AbstractClientPlayer tracked;
     private static float portalIntensity;
     private static float oPortalIntensity;
@@ -104,7 +106,7 @@ public class Playback implements ClientModInitializer {
     }
 
     public static void submit(Action action, Consumer<RegistryFriendlyByteBuf> encoder, AsyncReplaySaver... savers) {
-        RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), Minecraft.getInstance().level.registryAccess());
+        RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
         encoder.accept(buf);
         byte[] bytes = new byte[buf.readableBytes()];
         buf.readBytes(bytes);
