@@ -2,6 +2,8 @@ package org.polyfrost.playback.mixin.flashback;
 
 import com.moulberry.flashback.Flashback;
 import org.polyfrost.playback.shadow.ShadowReplay;
+import org.polyfrost.playback.shadow.ShadowReplayConfig;
+import org.polyfrost.playback.ui.ScreenCapture;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -20,6 +22,13 @@ public abstract class MixinFlashback {
     @Inject(method = {"finishRecordingReplay()V", "cancelRecordingReplay()V", "pauseRecordingReplay(Z)V"}, at = @At("HEAD"), cancellable = true)
     private static void playback$ignoreShadowReplay(CallbackInfo ci) {
         if (ShadowReplay.isShadow(Flashback.RECORDER)) {
+            ci.cancel();
+        }
+    }
+
+    @Inject(method = "finishRecordingReplay()V", at = @At("HEAD"), cancellable = true)
+    private static void playback$keepRecordingThroughMenus(CallbackInfo ci) {
+        if (ScreenCapture.disconnecting && ShadowReplayConfig.recordMainMenu) {
             ci.cancel();
         }
     }

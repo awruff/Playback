@@ -37,6 +37,9 @@ public class ShadowReplayConfig extends Config {
     @Switch(title = "Record menus in singleplayer", description = "Menus like the pause screen don't pause the game while Flashback is recording, so they show up in the replay", subcategory = "Recording")
     public static boolean recordMenus = true;
 
+    @Switch(title = "Keep recording through the main menu", description = "Leaving a server doesn't finish the Flashback recording, so the main menu and the next server you join end up in the same replay", subcategory = "Recording")
+    public static boolean recordMainMenu = true;
+
     public static final ShadowReplayConfig INSTANCE = new ShadowReplayConfig();
 
     public ShadowReplayConfig() {

@@ -3,6 +3,7 @@ package org.polyfrost.playback.mixin.flashback;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.v2.WrapWithCondition;
 import com.moulberry.flashback.Flashback;
+import com.moulberry.flashback.action.ActionNextTick;
 import com.moulberry.flashback.io.AsyncReplaySaver;
 import com.moulberry.flashback.io.ReplayWriter;
 import com.moulberry.flashback.record.Recorder;
@@ -52,6 +53,17 @@ public abstract class MixinRecorder implements ShadowRecorder {
     @Shadow
     private boolean finishedConfiguration;
 
+    @Shadow
+    private boolean closeForWriting;
+
+    @Shadow
+    private boolean needsInitialSnapshot;
+
+    @Override
+    public boolean playback$wroteInitialSnapshot() {
+        return !this.needsInitialSnapshot;
+    }
+
     @Override
     public int playback$writtenTicks() {
         return this.writtenTicks;
@@ -89,12 +101,33 @@ public abstract class MixinRecorder implements ShadowRecorder {
         org.polyfrost.playback.ui.GuiMeshCapture.reset();
     }
 
+    @Inject(method = "endTick", at = @At("HEAD"))
+    private void playback$writeMenuTick(boolean close, CallbackInfo ci) {
+        Minecraft minecraft = Minecraft.getInstance();
+        Recorder self = (Recorder) (Object) this;
+        if (close || this.closeForWriting || self.isPaused() || self != Flashback.RECORDER || ShadowReplay.isShadow(self)
+            || minecraft.level != null || minecraft.getConnection() != null) {
+            return;
+        }
+        boolean chunkStart = this.writtenTicksInChunk == 0;
+        //? if >=26.3
+        org.polyfrost.playback.ui.GuiMeshCapture.write(chunkStart, this.asyncReplaySaver);
+        ScreenFramesAction.write(chunkStart, this.asyncReplaySaver);
+        UiSoundAction.write(chunkStart, this.asyncReplaySaver);
+        this.asyncReplaySaver.submit(writer -> writer.startAndFinishAction(ActionNextTick.INSTANCE));
+        this.writtenTicksInChunk++;
+        this.writtenTicks++;
+    }
+
     @Inject(method = "endTick", at = @At(value = "INVOKE", target = "Lcom/moulberry/flashback/record/Recorder;writeLocalData()V", shift = At.Shift.AFTER))
     private void playback$writeCameraTrack(boolean close, CallbackInfo ci) {
         if ((Object) this != Flashback.RECORDER || Minecraft.getInstance().level == null) {
             return;
         }
         Recorder shadow = ShadowReplay.teeTarget((Recorder) (Object) this);
+        if (shadow != null && !((ShadowRecorder) shadow).playback$wroteInitialSnapshot()) {
+            shadow = null;
+        }
         AsyncReplaySaver[] savers = shadow == null ? new AsyncReplaySaver[]{this.asyncReplaySaver}
             : new AsyncReplaySaver[]{this.asyncReplaySaver, ((ShadowRecorder) shadow).playback$saver()};
         boolean chunkStart = this.writtenTicksInChunk == 0 || shadow != null && ((ShadowRecorder) shadow).playback$writtenTicksInChunk() == 0;

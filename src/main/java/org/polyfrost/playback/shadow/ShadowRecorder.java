@@ -8,6 +8,8 @@ public interface ShadowRecorder {
 
     int playback$writtenTicks();
 
+    boolean playback$wroteInitialSnapshot();
+
     int playback$writtenTicksInChunk();
 
     AsyncReplaySaver playback$saver();
