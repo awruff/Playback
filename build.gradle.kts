@@ -69,7 +69,7 @@ val mixinClasses = buildList {
         "MixinMinecraft", "MixinPanorama", "MixinPauseScreen", "MixinPlayer", "MixinSoundManager"))
     addAll(listOf("AsyncReplaySaverAccessor", "MixinFlashback", "MixinRecorder", "MixinReplayGamePacketHandler", "MixinReplayPlayer", "MixinReplayServer").map { "flashback.$it" })
     if (sc.current.parsed < "1.21.6") addAll(listOf("MixinFont", "MixinHudRenderCallback", "MixinLayeredDraw"))
-    if (sc.current.parsed >= "26.1") add("MixinCamera")
+    if (sc.current.parsed >= "26.1") addAll(listOf("MixinCamera", "flashback.MixinSaveableFramebuffer"))
     if (sc.current.parsed >= "26.2") add("MixinGui")
     if (sc.current.parsed >= "26.3") addAll(listOf("MixinLevelExtractor", "MixinGuiRenderState", "MixinDynamicTexture", "MixinLayerOp"))
     if (sc.current.parsed >= "1.21.6") add("MixinHudRootLayer")
