@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "package": "org.polyfrost.keyframe.mixin",
+  "plugin": "org.polyfrost.keyframe.boot.KeyframeMixinPlugin",
+  "compatibilityLevel": "${java}",
+  "client": [
+    ${mixin_classes}
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

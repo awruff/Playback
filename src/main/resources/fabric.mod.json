@@ -3,23 +3,44 @@
 	"id": "${id}",
 	"version": "${version}",
 	"name": "${name}",
+	"description": "Makes first-person replays look like what the player saw. Works as a Flashback add-on, or records and exports video by itself when Flashback isn't installed.",
 	"license": "GPL-3.0-only",
+	"icon": "assets/keyframe/icon.png",
 	"environment": "client",
 	"entrypoints": {
 		"client": [
-			"org.polyfrost.playback.Playback"
+			"org.polyfrost.keyframe.boot.KeyframeEntrypoint"
+		],
+		"keyframe-addon": [
+			"org.polyfrost.keyframe.Keyframe"
+		],
+		"mixinsquared": [
+			"org.polyfrost.keyframe.compat.LatticeCanceller"
+		],
+		"keyframe-standalone": [
+			{
+				"value": "org.polyfrost.keyframe.standalone.Standalone",
+				"adapter": "kotlin"
+			}
 		]
 	},
-	"accessWidener": "playback.accesswidener",
+	"accessWidener": "keyframe.accesswidener",
 	"mixins": [
-		"playback.mixins.json"
+		"keyframe.mixins.json",
+		"keyframe.standalone.mixins.json"
 	],
 	"depends": {
-		"fabricloader": ">=0.15.10",
+		"fabricloader": ">=${loader}",
 		"minecraft": "${minecraft}",
 		"java": ">=${java_version}",
 		"fabric-api": "*",
-		"flashback": ">=${flashback}",
+		"fabric-language-kotlin": "*",
 		"oneconfigv1": ">=${oneconfig}"
+	},
+	"suggests": {
+		"flashback": ">=${flashback}"
+	},
+	"breaks": {
+		"flashback": "<${flashback}"
 	}
 }
