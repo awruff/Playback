@@ -51,7 +51,10 @@ internal class ExportPreview(private val showFrame: Boolean) : AutoCloseable {
 		private set
 
 	fun draw(pixels: ByteArray, frameWidth: Int, frameHeight: Int, hasFrame: Boolean, nv12: Boolean, lines: List<String>) {
-		val size = Minecraft.getInstance().window.queryFramebufferSize()
+		//? if >=26.2 {
+		val size = Minecraft.getInstance().windowSurface().currentConfiguration().orElse(null) ?: return
+		//?} else
+		/*val size = Minecraft.getInstance().window.queryFramebufferSize()*/
 		val width = size.width()
 		val height = size.height()
 		if (width <= 0 || height <= 0) return

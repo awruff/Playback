@@ -39,6 +39,7 @@ object PreviewFrame {
 		GlStateManager.scalef(scale, scale, 1f)
 		GuiElement.fill(left.toInt(), top.toInt(), right.toInt(), bottom.toInt(), BLACK)
 		GlStateManager.enableTexture()
+		GlStateManager.disableAlphaTest()
 		GlStateManager.color4f(1f, 1f, 1f, 1f)
 		val texture = view.texture
 		GlStateManager.bindTexture(texture.id)
@@ -53,6 +54,7 @@ object PreviewFrame {
 		buffer.vertex(right, bottom, 0.0).texture(u1, 0.0).nextVertex()
 		buffer.vertex(right, top, 0.0).texture(u1, v).nextVertex()
 		tesselator.end()
+		GlStateManager.enableAlphaTest()
 		GlStateManager.popMatrix()
 	}
 

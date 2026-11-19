@@ -46,10 +46,10 @@ import net.minecraft.client.renderer.GameRenderer
 /*import com.mojang.renderpearl.api.buffers.GpuBuffer
 import com.mojang.renderpearl.api.commands.CommandEncoder
 *///?}
-//? if >=1.21.8 <26.1 {
-/*import net.minecraft.client.renderer.RenderPipelines
+//? if >=1.21.8 {
+import net.minecraft.client.renderer.RenderPipelines
 import org.polyfrost.keyframe.standalone.mixin.Mixin_Graphics_Blit
-*///?}
+//?}
 //? if <1.21.11 {
 /*import net.minecraft.client.multiplayer.ClientPacketListener
 import net.minecraft.client.resources.sounds.SoundInstance
@@ -146,7 +146,7 @@ internal fun CommandEncoder.submit() {}
 internal fun resizeRenderTargets(width: Int, height: Int) = Minecraft.getInstance().gameRenderer.resize(width, height)
 
 internal fun GuiGraphicsExtractor.blitPreview(view: GpuTextureView, x0: Int, y0: Int, x1: Int, y1: Int, u0: Float, u1: Float, v0: Float, v1: Float) =
-	blit(view, RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR), x0, y0, x1, y1, u0, u1, v0, v1)
+	(this as Mixin_Graphics_Blit).`keyframe$submitBlit`(RenderPipelines.GUI_OPAQUE_TEXTURED_BACKGROUND, view, RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR), x0, y0, x1, y1, u0, u1, v0, v1, -1)
 //?} else {
 /*internal fun resizeRenderTargets(width: Int, height: Int) {
 	val mc = Minecraft.getInstance()
@@ -170,13 +170,13 @@ internal fun LocalPlayer.sendOverlayMessage(message: String) = sendOverlayMessag
 
 //? if >=1.21.11 <26.1 {
 /*internal fun GuiGraphicsExtractor.blitPreview(view: GpuTextureView, x0: Int, y0: Int, x1: Int, y1: Int, u0: Float, u1: Float, v0: Float, v1: Float) =
-	(this as Mixin_Graphics_Blit).`keyframe$submitBlit`(RenderPipelines.GUI_TEXTURED, view, RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR), x0, y0, x1, y1, u0, u1, v0, v1, -1)
+	(this as Mixin_Graphics_Blit).`keyframe$submitBlit`(RenderPipelines.GUI_OPAQUE_TEXTURED_BACKGROUND, view, RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR), x0, y0, x1, y1, u0, u1, v0, v1, -1)
 *///?}
 
 //? if >=1.21.8 <1.21.11 {
 /*internal fun GuiGraphicsExtractor.blitPreview(view: GpuTextureView, x0: Int, y0: Int, x1: Int, y1: Int, u0: Float, u1: Float, v0: Float, v1: Float) {
 	view.texture().setTextureFilter(FilterMode.LINEAR, false)
-	(this as Mixin_Graphics_Blit).`keyframe$submitBlit`(RenderPipelines.GUI_TEXTURED, view, x0, y0, x1, y1, u0, u1, v0, v1, -1)
+	(this as Mixin_Graphics_Blit).`keyframe$submitBlit`(RenderPipelines.GUI_OPAQUE_TEXTURED_BACKGROUND, view, x0, y0, x1, y1, u0, u1, v0, v1, -1)
 }
 *///?}
 
