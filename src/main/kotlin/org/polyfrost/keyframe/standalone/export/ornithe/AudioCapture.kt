@@ -14,7 +14,11 @@ import org.lwjgl.system.MemoryStack
 import paulscode.sound.Library
 import paulscode.sound.SoundSystemConfig
 import paulscode.sound.libraries.ChannelLWJGLOpenAL
+import java.nio.IntBuffer
 import java.nio.channels.FileChannel
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Executor
+import java.util.concurrent.TimeUnit
 
 private const val START_TIMEOUT_MILLIS = 5000L
 private const val STREAM_WAIT_NANOS = 250_000_000L
@@ -30,6 +34,9 @@ object AudioCapture {
 
 	private var commandQueue: List<*>? = null
 	private var library: Library? = null
+
+	@JvmStatic
+	var soundFixExecutor: Executor? = null
 
 	@JvmStatic
 	fun attach(commandQueue: List<*>?, library: Library?) {
@@ -54,33 +61,44 @@ object AudioCapture {
 	fun disarm() {
 		if (!armed) return
 		armed = false
+		if (soundFixExecutor != null) device = 0L
 		restartSound()
 	}
 
 	private fun restartSound() {
 		val engine = engine
 		engine.reload()
+		if (soundFixExecutor != null) return
 		val deadline = System.currentTimeMillis() + START_TIMEOUT_MILLIS
 		while (!(engine as Mixin_SoundEngine_Audio).`keyframe$isStarted`() && System.currentTimeMillis() < deadline) Thread.sleep(10)
 	}
 
 	@JvmStatic
 	fun open() {
-		val device = SOFTLoopback.alcLoopbackOpenDeviceSOFT(null as CharSequence?)
-		check(device != 0L) { "alcLoopbackOpenDeviceSOFT failed" }
-		MemoryStack.stackPush().use { stack ->
-			val attributes = stack.ints(
-				SOFTLoopback.ALC_FORMAT_CHANNELS_SOFT, SOFTLoopback.ALC_STEREO_SOFT,
-				SOFTLoopback.ALC_FORMAT_TYPE_SOFT, SOFTLoopback.ALC_FLOAT_SOFT,
-				ALC10.ALC_FREQUENCY, AUDIO_SAMPLE_RATE.toInt(),
-				0,
-			)
-			context = ALC10.alcCreateContext(device, attributes)
-		}
+		val device = openLoopback()
+		context = MemoryStack.stackPush().use { ALC10.alcCreateContext(device, attributes(it, it.ints(0))) }
 		check(context != 0L) { "alcCreateContext failed" }
 		ALC10.alcMakeContextCurrent(context)
 		AL.createCapabilities(ALC.createCapabilities(device))
 		this.device = device
+	}
+
+	@JvmStatic
+	fun openSoundFix(): Long = openLoopback().also { device = it }
+
+	@JvmStatic
+	fun attributes(stack: MemoryStack, base: IntBuffer): IntBuffer {
+		val attributes = stack.mallocInt(base.remaining() + 6)
+		attributes.put(SOFTLoopback.ALC_FORMAT_CHANNELS_SOFT).put(SOFTLoopback.ALC_STEREO_SOFT)
+		attributes.put(SOFTLoopback.ALC_FORMAT_TYPE_SOFT).put(SOFTLoopback.ALC_FLOAT_SOFT)
+		attributes.put(ALC10.ALC_FREQUENCY).put(AUDIO_SAMPLE_RATE.toInt())
+		return attributes.put(base).flip()
+	}
+
+	private fun openLoopback(): Long {
+		val device = SOFTLoopback.alcLoopbackOpenDeviceSOFT(null as CharSequence?)
+		check(device != 0L) { "alcLoopbackOpenDeviceSOFT failed" }
+		return device
 	}
 
 	@JvmStatic
@@ -101,6 +119,10 @@ object AudioCapture {
 	}
 
 	fun render(samples: Int, output: FileChannel?) {
+		soundFixExecutor?.let {
+			CompletableFuture.runAsync({ renderLoopback(device, samples, output) }, it).get(START_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
+			return
+		}
 		val deadline = System.currentTimeMillis() + START_TIMEOUT_MILLIS
 		while (commandQueue?.isEmpty() == false && System.currentTimeMillis() < deadline) Thread.onSpinWait()
 		awaitStreams()
