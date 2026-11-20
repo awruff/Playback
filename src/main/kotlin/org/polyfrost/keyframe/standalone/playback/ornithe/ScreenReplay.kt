@@ -20,6 +20,10 @@ import org.polyfrost.keyframe.standalone.mixin.ornithe.Mixin_ListWidget_ScreenSt
 import org.lwjgl.input.Mouse
 
 object ScreenReplay : ScreenReplayCore() {
+	@JvmStatic
+	var drawingPreview: Screen? = null
+		private set
+
 	override fun applyToScreen(screen: Screen, state: ScreenState) {
 		val creative = screen as? CreativeInventoryScreen
 		val fields = creative as Mixin_CreativeInventoryScreen_ScreenState?
@@ -88,7 +92,12 @@ object ScreenReplay : ScreenReplayCore() {
 			val cursor = sample(deltaTracker, window)
 			try {
 				if (screen.width != window.width || screen.height != window.height) screen.init(mc, window.width, window.height)
-				screen.render(cursor?.mouseX ?: -1, cursor?.mouseY ?: -1, deltaTracker.getGameTimeDeltaTicks())
+				drawingPreview = screen
+				try {
+					screen.render(cursor?.mouseX ?: -1, cursor?.mouseY ?: -1, deltaTracker.getGameTimeDeltaTicks())
+				} finally {
+					drawingPreview = null
+				}
 				if (cursor != null) drawCursor(cursor)
 			} catch (e: RuntimeException) {
 				drop(e)
