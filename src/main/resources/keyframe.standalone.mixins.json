@@ -5,6 +5,8 @@
 	"compatibilityLevel": "${java}",
 	"client": [
 		"Mixin_Camera_Puppet",
+		"Mixin_ChatComponent_Chat",
+		"Mixin_ChatComponent_Replay",
 		"Mixin_ClientAvatarState_Puppet",
 		"Mixin_ClientConfigurationPacketListenerImpl_Core",
 		"Mixin_ClientHandshakePacketListenerImpl_Core",
@@ -55,6 +57,8 @@
 		"Mixin_SoundManager_Audio",
 		"Mixin_SwingState_Puppet",
 		"Mixin_Window_Editor",
+		"ornithe.Mixin_ChatGui_Chat",
+		"ornithe.Mixin_ChatGui_Replay",
 		"ornithe.Mixin_ChunkRenderDispatcher_Export",
 		"ornithe.Mixin_ClientLoginNetworkHandler_Core",
 		"ornithe.Mixin_ClientPlayNetworkHandler_Core",

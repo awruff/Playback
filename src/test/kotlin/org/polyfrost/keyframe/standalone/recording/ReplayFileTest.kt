@@ -74,7 +74,6 @@ class ReplayFileTest {
 		ReplayReader(path, header.protocol).use { reader ->
 			val record = reader.next()!!
 			assertEquals(14, record.type)
-			assertEquals(ReplayFile.LAST_TYPE, record.type)
 			val thumbnail = decodeThumbnail(record.payload)!!
 			assertEquals(7, thumbnail.tick)
 			assertEquals(listOf<Byte>(1, 2, 3), thumbnail.jpeg.toList())
@@ -167,6 +166,17 @@ class ReplayFileTest {
 			assertEquals(ReplayFile.CLIP, record.type)
 			assertEquals(900, record.tick)
 			assertEquals(Clip(300, 900), decodeClip(record.payload))
+			assertNull(reader.next())
+		}
+	}
+
+	@Test
+	fun chatHistoryRecordsSurviveTheFile() {
+		val path = write("chat.pbrm") { it.write(ReplayFile.CHAT_HISTORY, 0, byteArrayOf(4, 2)) }
+		ReplayReader(path, header.protocol).use { reader ->
+			val record = reader.next()!!
+			assertEquals(15, record.type)
+			assertEquals(listOf<Byte>(4, 2), record.payload.toList())
 			assertNull(reader.next())
 		}
 	}

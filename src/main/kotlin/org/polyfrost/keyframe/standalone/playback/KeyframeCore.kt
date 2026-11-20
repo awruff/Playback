@@ -43,6 +43,7 @@ abstract class KeyframeCore {
 	protected abstract val loginPlay: BitSet
 	protected abstract val worldChangePlay: BitSet
 	protected abstract val noisyPlay: BitSet
+	protected abstract val chatPlay: BitSet
 
 	protected abstract val rollsInMenu: Boolean
 
@@ -57,6 +58,10 @@ abstract class KeyframeCore {
 	protected open fun started() {}
 
 	protected open fun stopped() {}
+
+	open fun sampleChatHistory(): ByteArray? = null
+
+	protected open fun onChatHistory(payload: ByteArray) {}
 
 	private var session: Session? = null
 
@@ -74,6 +79,11 @@ abstract class KeyframeCore {
 
 	val blocksInput: Boolean
 		get() = active && !previewing
+
+	private var replayingChat = false
+
+	val blocksChat: Boolean
+		get() = active && !replayingChat
 
 	val loaded: Boolean
 		get() = Minecraft.getInstance().let { it.level != null && it.gui.screen() !is LevelLoadingScreen }
@@ -259,13 +269,14 @@ abstract class KeyframeCore {
 			}
 			session.pending = null
 			when (record.type) {
-				ReplayFile.CONFIG_FRAME -> blockedConfig?.let { blocked -> if (!session.rewound) feed(record) { blocked[it] } }
-				ReplayFile.PLAY_FRAME -> feed(record) { skipsPlay(session, it) }
+				ReplayFile.CONFIG_FRAME -> blockedConfig?.let { blocked -> if (!session.rewound) feed(record, null) { blocked[it] } }
+				ReplayFile.PLAY_FRAME -> feed(record, chatPlay) { skipsPlay(session, it) }
 				ReplayFile.SNAPSHOT -> Puppet.onSnapshot(record)
 				ReplayFile.EVENT -> LocalEvents.replay(record, session.tick >= session.rollTo)
 				ReplayFile.SCREEN_TRANSITION -> ScreenReplay.onTransition(record)
 				ReplayFile.SCREEN_STATE -> ScreenReplay.onState(record)
 				ReplayFile.CHANNEL -> Channels.onRecord(record)
+				ReplayFile.CHAT_HISTORY -> onChatHistory(record.payload)
 				ReplayFile.SESSION_BREAK -> crossBreak(session)
 			}
 		}
@@ -296,9 +307,16 @@ abstract class KeyframeCore {
 			(session.preview && session.tick < session.rollTo && noisyPlay[id])
 	}
 
-	private fun feed(record: ReplayRecord, skips: (Int) -> Boolean) {
+	private fun feed(record: ReplayRecord, chat: BitSet?, skips: (Int) -> Boolean) {
 		try {
-			frame(record.payload, skips)?.let { session?.channel?.writeInbound(it) }
+			var isChat = false
+			val packet = frame(record.payload) { id -> isChat = chat?.get(id) == true; skips(id) } ?: return
+			replayingChat = isChat
+			try {
+				session?.channel?.writeInbound(packet)
+			} finally {
+				replayingChat = false
+			}
 		} catch (e: Exception) {
 			LOGGER.error("Could not replay frame at tick {}", record.tick, e)
 		}

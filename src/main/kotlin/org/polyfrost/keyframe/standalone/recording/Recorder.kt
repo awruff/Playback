@@ -19,6 +19,7 @@ import org.polyfrost.keyframe.standalone.Standalone
 import org.polyfrost.keyframe.standalone.StandaloneConfig
 import org.polyfrost.keyframe.standalone.compat.*
 import org.polyfrost.keyframe.standalone.playback.ChangedPayload
+import org.polyfrost.keyframe.standalone.playback.Keyframe
 import org.polyfrost.keyframe.standalone.playback.LocalEvents
 import org.polyfrost.keyframe.standalone.playback.Puppet
 import org.polyfrost.keyframe.standalone.playback.ScreenReplay
@@ -104,6 +105,7 @@ object Recorder {
 			lastClipTick = -1
 			Channels.resetWritten()
 			this.writer = writer
+			runCatching { Keyframe.sampleChatHistory() }.getOrNull()?.let { writer.write(ReplayFile.CHAT_HISTORY, currentTick, it) }
 		} catch (e: IOException) {
 			LOGGER.error("Could not open recording", e)
 		}

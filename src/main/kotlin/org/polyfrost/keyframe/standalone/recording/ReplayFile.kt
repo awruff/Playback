@@ -33,7 +33,8 @@ object ReplayFile {
 	const val SCREEN_STATE = 12
 	const val CHANNEL = 13
 	const val THUMBNAIL = 14
-	const val LAST_TYPE = THUMBNAIL
+	const val CHAT_HISTORY = 15
+	const val LAST_TYPE = CHAT_HISTORY
 
 	const val MARKER_STOP: Byte = 0
 	const val MARKER_START: Byte = 1

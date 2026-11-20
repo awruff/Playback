@@ -19,10 +19,18 @@ import net.minecraft.network.packet.s2c.play.LoginS2CPacket
 import net.minecraft.network.packet.s2c.play.ParticleS2CPacket
 import net.minecraft.network.packet.s2c.play.PlayerRespawnS2CPacket
 import net.minecraft.network.packet.s2c.play.ResourcePackS2CPacket
+import net.minecraft.network.packet.s2c.play.ChatMessageS2CPacket
 import net.minecraft.network.packet.s2c.play.CompressionThresholdS2CPacket
 import net.minecraft.network.packet.s2c.play.SoundEventS2CPacket
 import net.minecraft.network.packet.s2c.play.WorldEventS2CPacket
+import net.minecraft.client.gui.ChatMessage
+import net.minecraft.text.Text
 import org.polyfrost.keyframe.standalone.compat.*
+import org.polyfrost.keyframe.standalone.mixin.ornithe.Mixin_ChatGui_Chat
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.io.DataInputStream
+import java.io.DataOutputStream
 import org.polyfrost.keyframe.standalone.recording.ReplayHeader
 import java.util.BitSet
 
@@ -36,6 +44,7 @@ object Keyframe : KeyframeCore() {
 	override val loginPlay by lazy { playIds { it is LoginS2CPacket } }
 	override val worldChangePlay by lazy { playIds { it is PlayerRespawnS2CPacket } }
 	override val noisyPlay by lazy { playIds { it is SoundEventS2CPacket || it is ParticleS2CPacket || it is WorldEventS2CPacket } }
+	override val chatPlay by lazy { playIds { it is ChatMessageS2CPacket } }
 
 	override val rollsInMenu = true
 
@@ -73,6 +82,38 @@ object Keyframe : KeyframeCore() {
 	override fun started() = ArgentumCompat.forceUnbatchedFont(true)
 
 	override fun stopped() = ArgentumCompat.forceUnbatchedFont(false)
+
+	override fun sampleChatHistory(): ByteArray? {
+		val gui = Minecraft.getInstance().gui
+		val messages = (gui.chat as Mixin_ChatGui_Chat).`keyframe$getMessages`().toList()
+		if (messages.isEmpty()) return null
+		val bytes = ByteArrayOutputStream()
+		DataOutputStream(bytes).use { out ->
+			out.writeInt(messages.size)
+			for (message in messages) {
+				val json = Text.Serializer.toJson(message.text).toByteArray(Charsets.UTF_8)
+				out.writeInt(gui.ticks - message.timeOfCreation)
+				out.writeInt(message.id)
+				out.writeInt(json.size)
+				out.write(json)
+			}
+		}
+		return bytes.toByteArray()
+	}
+
+	override fun onChatHistory(payload: ByteArray) {
+		val gui = Minecraft.getInstance().gui
+		val messages = (gui.chat as Mixin_ChatGui_Chat).`keyframe$getMessages`()
+		DataInputStream(ByteArrayInputStream(payload)).use { input ->
+			repeat(input.readInt()) {
+				val age = input.readInt()
+				val id = input.readInt()
+				val json = String(input.readNBytes(input.readInt()), Charsets.UTF_8)
+				runCatching { Text.Serializer.fromJson(json) }.getOrNull()?.let { messages.add(ChatMessage(gui.ticks - age, it, id)) }
+			}
+		}
+		gui.chat.reset()
+	}
 
 	private fun playIds(match: (Packet<*>) -> Boolean): BitSet {
 		val ids = BitSet()
