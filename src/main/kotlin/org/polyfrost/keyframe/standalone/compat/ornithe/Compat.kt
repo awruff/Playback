@@ -482,34 +482,11 @@ object ArgentumCompat {
 		requestFramebuffer?.invoke(Minecraft.getInstance())
 	}
 
-	private val vanillaText by lazy {
-		runCatching {
-			val font = Minecraft.getInstance().textRenderer
-			val batcher = font.javaClass.getMethod("argentum\$getBatcher").invoke(font)
-			batcher.javaClass.getDeclaredField("vanilla").apply { isAccessible = true } to batcher
-		}.getOrNull()
-	}
-
 	private val config by lazy { runCatching { Class.forName("dev.rdh.argentum.impl.Argentum").getField("CONFIG") }.getOrNull() }
 
-	private var ownVanillaText: Boolean? = null
 	private var ownFontBatching: Boolean? = null
 
-	fun forceVanillaText(force: Boolean) {
-		val (field, batcher) = vanillaText ?: return
-		runCatching {
-			if (force) {
-				if (ownVanillaText == null) ownVanillaText = field.getBoolean(batcher)
-				field.setBoolean(batcher, true)
-			} else {
-				ownVanillaText?.let { field.setBoolean(batcher, it) }
-				ownVanillaText = null
-			}
-		}
-		forceUnbatchedFont(force)
-	}
-
-	private fun forceUnbatchedFont(force: Boolean) {
+	fun forceUnbatchedFont(force: Boolean) {
 		runCatching {
 			val cfg = config?.get(null) ?: return
 			val field = cfg.javaClass.getField("fontBatching")

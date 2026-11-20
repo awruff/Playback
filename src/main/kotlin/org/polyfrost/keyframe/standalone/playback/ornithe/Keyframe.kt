@@ -70,9 +70,9 @@ object Keyframe : KeyframeCore() {
 
 	override fun playRate(session: KeyframeCore.Session) = session.clipSpeed
 
-	override fun started() = ArgentumCompat.forceVanillaText(true)
+	override fun started() = ArgentumCompat.forceUnbatchedFont(true)
 
-	override fun stopped() = ArgentumCompat.forceVanillaText(false)
+	override fun stopped() = ArgentumCompat.forceUnbatchedFont(false)
 
 	private fun playIds(match: (Packet<*>) -> Boolean): BitSet {
 		val ids = BitSet()
