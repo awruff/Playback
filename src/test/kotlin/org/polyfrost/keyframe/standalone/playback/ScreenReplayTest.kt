@@ -140,6 +140,7 @@ class ScreenReplayTest {
 		assertEquals(2, cursor.height)
 		assertEquals(5, cursor.hotX)
 		assertEquals(6, cursor.hotY)
+		assertEquals(32f, cursor.scale)
 		assertContentEquals(intArrayOf(0xFF000001.toInt(), 0xFF000002.toInt()), cursor.argb)
 	}
 

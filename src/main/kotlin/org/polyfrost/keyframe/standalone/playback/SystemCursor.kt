@@ -26,7 +26,9 @@ private const val PNG_MAGIC = 0x474E5089
 private const val DEFAULT_XCURSOR_SIZE = 24
 private const val WINDOWS_CURSOR_SIZE = 32
 
-internal class CursorPixels(val width: Int, val height: Int, val hotX: Int, val hotY: Int, val argb: IntArray)
+internal class CursorPixels(val width: Int, val height: Int, val hotX: Int, val hotY: Int, val argb: IntArray, val scale: Float = 1f) {
+	fun scaled(scale: Float) = CursorPixels(width, height, hotX, hotY, argb, scale)
+}
 
 internal fun parseXcursor(data: ByteArray, wanted: Int): CursorPixels? {
 	val buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN)
@@ -56,7 +58,7 @@ internal fun parseCur(data: ByteArray, wanted: Int): CursorPixels? {
 	val hotY = buffer.getShort(best + 6).toInt()
 	val length = buffer.getInt(best + 8)
 	val offset = buffer.getInt(best + 12)
-	if (buffer.getInt(offset) == PNG_MAGIC) return readPng(data.copyOfRange(offset, offset + length), hotX, hotY)
+	if (buffer.getInt(offset) == PNG_MAGIC) return readPng(data.copyOfRange(offset, offset + length), hotX, hotY).let { it.scaled(wanted.toFloat() / it.width) }
 
 	val width = buffer.getInt(offset + 4)
 	val height = buffer.getInt(offset + 8) / 2
@@ -66,7 +68,7 @@ internal fun parseCur(data: ByteArray, wanted: Int): CursorPixels? {
 		val rowFromBottom = height - 1 - it / width
 		buffer.getInt(pixels + (rowFromBottom * width + it % width) * 4)
 	}
-	return CursorPixels(width, height, hotX, hotY, argb)
+	return CursorPixels(width, height, hotX, hotY, argb, wanted.toFloat() / width)
 }
 
 private fun curSize(buffer: ByteBuffer, entry: Int): Int {
@@ -81,7 +83,7 @@ private fun readPng(data: ByteArray, hotX: Int, hotY: Int): CursorPixels =
 	/*NativeImage.read(data).use { CursorPixels(it.width, it.height, hotX, hotY, it.pixelsRGBA.map(::swapRedBlue).toIntArray()) }*/
 
 object SystemCursor {
-	class Loaded(val texture: Identifier, val width: Int, val height: Int, val hotX: Int, val hotY: Int)
+	class Loaded(val texture: Identifier, val width: Int, val height: Int, val hotX: Int, val hotY: Int, val scale: Float)
 
 	private val LOGGER = LoggerFactory.getLogger(Standalone.MOD_ID)
 
@@ -114,7 +116,7 @@ object SystemCursor {
 		Minecraft.getInstance().textureManager.register(id, DynamicTexture({ "Keyframe cursor" }, image))
 		//?} else
 		/*Minecraft.getInstance().textureManager.register(id, DynamicTexture(image))*/
-		return Loaded(id, pixels.width, pixels.height, pixels.hotX, pixels.hotY)
+		return Loaded(id, pixels.width, pixels.height, pixels.hotX, pixels.hotY, pixels.scale)
 	}
 
 	internal fun readXcursor(): CursorPixels? {
@@ -175,7 +177,7 @@ object SystemCursor {
 		for ((name, scale) in listOf("cursor@2x.png" to 2, "cursor.png" to 1)) {
 			val file = dir.resolve(name)
 			if (Files.isRegularFile(file)) {
-				return readPng(file.readBytes(), (plistNumber(plist, "hotx") * scale).toInt(), (plistNumber(plist, "hoty") * scale).toInt())
+				return readPng(file.readBytes(), (plistNumber(plist, "hotx") * scale).toInt(), (plistNumber(plist, "hoty") * scale).toInt()).scaled(1f / scale)
 			}
 		}
 		return null

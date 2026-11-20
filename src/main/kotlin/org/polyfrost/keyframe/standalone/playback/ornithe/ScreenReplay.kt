@@ -129,7 +129,7 @@ object ScreenReplay : ScreenReplayCore() {
 	@JvmStatic
 	fun drawCursor(cursor: CursorSample) {
 		val image = SystemCursor.get() ?: return
-		val scale = 1f / cursor.guiScale
+		val scale = image.scale / cursor.guiScale
 		GlStateManager.pushMatrix()
 		GlStateManager.translatef(cursor.x, cursor.y, 0f)
 		GlStateManager.scalef(scale, scale, 1f)

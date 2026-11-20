@@ -446,7 +446,7 @@ object ScreenReplay : ScreenReplayCore() {
 
 	fun drawCursor(graphics: GuiGraphicsExtractor, cursor: CursorSample) {
 		val image = SystemCursor.get() ?: return
-		graphics.pose().pushMatrix().translate(cursor.x, cursor.y).scale(1f / cursor.guiScale)
+		graphics.pose().pushMatrix().translate(cursor.x, cursor.y).scale(image.scale / cursor.guiScale)
 		//? if >=1.21.8 {
 		graphics.blit(RenderPipelines.GUI_TEXTURED, image.texture, -image.hotX, -image.hotY, 0f, 0f, image.width, image.height, image.width, image.height)
 		//?} elif >=1.21.4 {
