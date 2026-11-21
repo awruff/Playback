@@ -5,7 +5,7 @@ mod.version = "1.0.0-alpha.14"
 
 deps.fabric_loader = "0.20.1"
 deps.fabric_kotlin = "1.14.2+kotlin.2.4.21"
-deps.oneconfig = "1.8.0"
+deps.oneconfig = "1.9.0"
 
 ["1.8.9"]
 mod.mc_compat = "1.8.9"

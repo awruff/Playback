@@ -113,7 +113,7 @@ import org.polyfrost.oneconfig.api.ui.v1.theme.ProvideOneConfigTheme
 import org.polyfrost.oneconfig.api.ui.v1.theme.concentric
 import org.polyfrost.oneconfig.internal.ui.components.settings.LocalOptionWidth
 import org.polyfrost.oneconfig.internal.ui.components.settings.Option
-import org.polyfrost.oneconfig.internal.ui.compose.ComposeScreen
+import org.polyfrost.compose.minecraft.screen.ComposeScreen
 
 private const val PLAY_ICON = "/assets/keyframe/ico/play.svg"
 private const val PAUSE_ICON = "/assets/keyframe/ico/pause.svg"

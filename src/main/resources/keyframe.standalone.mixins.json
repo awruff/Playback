@@ -63,7 +63,6 @@
 		"ornithe.Mixin_ClientLoginNetworkHandler_Core",
 		"ornithe.Mixin_ClientPlayNetworkHandler_Core",
 		"ornithe.Mixin_ClientWorld_Events",
-		"ornithe.Mixin_ComposeScreen_ScreenState",
 		"ornithe.Mixin_ClientPlayerInteractionManager_Events",
 		"ornithe.Mixin_Connection_Core",
 		"ornithe.Mixin_CreativeInventoryScreen_ScreenState",

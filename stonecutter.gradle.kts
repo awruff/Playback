@@ -66,7 +66,7 @@ stonecutter parameters {
         }
         string(current.parsed < "26.2") {
             replace("minecraft.gui.hud.getGuiTicks()", "minecraft.gui.getGuiTicks()")
-            replace("minecraft.gui.screen()", "minecraft.screen")
+            replace(" minecraft.gui.screen()", " minecraft.screen")
         }
         string(current.parsed < "26.1") {
             replace("MixinGuiGraphicsExtractor", "MixinGuiGraphicsExtractor")
