@@ -11,6 +11,8 @@ public final class ViewCapture {
     private static float pitchOffset;
     private static float fovScale = Float.NaN;
     private static float playbackFovScale = Float.NaN;
+    private static float playbackYawOffset;
+    private static float playbackPitchOffset;
 
     private ViewCapture() {
     }
@@ -48,6 +50,27 @@ public final class ViewCapture {
 
     public static float pitch(LocalPlayer player, float partialTick) {
         return player.getViewXRot(partialTick) + pitchOffset;
+    }
+
+    public static float yawOffset() {
+        return yawOffset;
+    }
+
+    public static float pitchOffset() {
+        return pitchOffset;
+    }
+
+    public static void playOffset(float yaw, float pitch) {
+        playbackYawOffset = yaw;
+        playbackPitchOffset = pitch;
+    }
+
+    public static float playYaw(float yaw) {
+        return yaw + playbackYawOffset;
+    }
+
+    public static float playPitch(float pitch) {
+        return pitch + playbackPitchOffset;
     }
 
     public static float fov(float fov) {

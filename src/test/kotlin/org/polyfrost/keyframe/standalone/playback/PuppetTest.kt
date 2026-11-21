@@ -76,6 +76,25 @@ class PuppetTest {
 	}
 
 	@Test
+	fun cameraKeepsPerspectiveAndDefaultsOldSamples() {
+		assertEquals(1, decodeCamera(ReplayRecord(ReplayFile.CAMERA, 7, encodeCamera(0.5f, 90f, -10f, 0.4f, 1)))!!.perspective)
+		assertEquals(-1, decodeCamera(ReplayRecord(ReplayFile.CAMERA, 7, encodeCamera(0.5f, 90f, -10f, 0.4f, 1).copyOf(16)))!!.perspective)
+		val track = track(CameraSample(10.0, 0f, 0f, perspective = 0), CameraSample(11.0, 0f, 0f, perspective = 1))
+		assertEquals(0, track.at(10.5)!!.perspective)
+		assertEquals(1, track.at(11.0)!!.perspective)
+	}
+
+	@Test
+	fun cameraKeepsFreelookOffsetAndInterpolatesAcrossTheWrap() {
+		val sample = decodeCamera(ReplayRecord(ReplayFile.CAMERA, 7, encodeCamera(0.5f, 90f, -10f, 0.4f, 1, 170f, 20f)))!!
+		assertEquals(170f, sample.yawOffset)
+		assertEquals(20f, sample.pitchOffset)
+		assertEquals(0f, decodeCamera(ReplayRecord(ReplayFile.CAMERA, 7, encodeCamera(0.5f, 90f, -10f, 0.4f, 1, 170f, 20f).copyOf(20)))!!.yawOffset)
+		val track = track(CameraSample(10.0, 0f, 0f, yawOffset = 170f), CameraSample(11.0, 0f, 0f, yawOffset = -170f))
+		assertEquals(180f, track.at(10.5)!!.yawOffset)
+	}
+
+	@Test
 	fun otherRecordsAreNotCameraSamples() {
 		assertNull(decodeCamera(ReplayRecord(ReplayFile.SNAPSHOT, 7, encodeCamera(0f, 0f, 0f))))
 		assertNull(decodeCamera(ReplayRecord(ReplayFile.CAMERA, 7, ByteArray(3))))

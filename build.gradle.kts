@@ -159,7 +159,7 @@ val addonMixins = if (isOrnithe) {
 val skippedStandaloneMixins = buildList {
     if (sc.current.parsed >= "26.3") add("Mixin_KeyboardHandler_Core")
     else addAll(listOf("Mixin_SDLEventHandler_Core", "Mixin_SwingState_Puppet"))
-    if (sc.current.parsed >= "26.1") addAll(listOf("Mixin_Graphics_Blit", "Mixin_GameRenderer_Puppet"))
+    if (sc.current.parsed >= "26.1") add("Mixin_GameRenderer_Puppet")
     if (sc.current.parsed >= "26.2") add("Mixin_GlBuffer_Export")
     if (sc.current.parsed >= "1.21.10") add("Mixin_DebugScreenOverlay_Export")
     else addAll(listOf("Mixin_ClientAvatarState_Puppet", "Mixin_LocalPlayer_Spinning"))

@@ -3,6 +3,7 @@ package org.polyfrost.keyframe.standalone.playback
 //? if >=1.21.1 {
 import io.netty.buffer.ByteBufUtil
 import io.netty.buffer.Unpooled
+import net.minecraft.client.CameraType
 import net.minecraft.client.KeyMapping
 //? if >=1.21.4 {
 import net.minecraft.client.player.ClientInput
@@ -67,7 +68,9 @@ internal const val SHOWS_MAIN_HAND_ITEM = 1 shl 12
 internal const val SHOWS_OFF_HAND_ITEM = 1 shl 13
 
 private const val LEGACY_CAMERA_PAYLOAD_LEN = 12
-private const val CAMERA_PAYLOAD_LEN = 16
+private const val FOV_CAMERA_PAYLOAD_LEN = 16
+private const val PERSPECTIVE_CAMERA_PAYLOAD_LEN = 20
+private const val CAMERA_PAYLOAD_LEN = 28
 internal const val CARRIED_SLOT = -1
 
 internal class SlotChange(val slot: Int, val stack: ByteArray)
@@ -123,7 +126,15 @@ interface Timed {
 	val time: Double
 }
 
-internal class CameraSample(override val time: Double, val yaw: Float, val pitch: Float, val fov: Float = Float.NaN) : Timed
+internal class CameraSample(
+	override val time: Double,
+	val yaw: Float,
+	val pitch: Float,
+	val fov: Float = Float.NaN,
+	val perspective: Int = -1,
+	val yawOffset: Float = 0f,
+	val pitchOffset: Float = 0f,
+) : Timed
 
 internal fun encodeSnapshot(snapshot: Snapshot): ByteArray {
 	val bytes = ByteArrayOutputStream()
@@ -213,17 +224,29 @@ internal fun decodeSnapshot(payload: ByteArray): Snapshot = DataInputStream(Byte
 private fun DataInputStream.readBounded(): Int =
 	readInt().also { if (it !in 0..available()) throw IOException("Malformed snapshot") }
 
-internal fun encodeCamera(partial: Float, yaw: Float, pitch: Float, fov: Float = Float.NaN): ByteArray =
-	ByteBuffer.allocate(CAMERA_PAYLOAD_LEN).putFloat(partial).putFloat(yaw).putFloat(pitch).putFloat(fov).array()
+internal fun encodeCamera(
+	partial: Float,
+	yaw: Float,
+	pitch: Float,
+	fov: Float = Float.NaN,
+	perspective: Int = -1,
+	yawOffset: Float = 0f,
+	pitchOffset: Float = 0f,
+): ByteArray =
+	ByteBuffer.allocate(CAMERA_PAYLOAD_LEN).putFloat(partial).putFloat(yaw).putFloat(pitch).putFloat(fov).putInt(perspective)
+		.putFloat(yawOffset).putFloat(pitchOffset).array()
 
 internal fun decodeCamera(record: ReplayRecord): CameraSample? {
-	if (record.type != ReplayFile.CAMERA || record.payload.size != CAMERA_PAYLOAD_LEN && record.payload.size != LEGACY_CAMERA_PAYLOAD_LEN) return null
+	if (record.type != ReplayFile.CAMERA || record.payload.size !in setOf(LEGACY_CAMERA_PAYLOAD_LEN, FOV_CAMERA_PAYLOAD_LEN, PERSPECTIVE_CAMERA_PAYLOAD_LEN, CAMERA_PAYLOAD_LEN)) return null
 	val buffer = ByteBuffer.wrap(record.payload)
 	return CameraSample(
 		record.tick + buffer.getFloat().toDouble(),
 		buffer.getFloat(),
 		buffer.getFloat(),
 		if (buffer.hasRemaining()) buffer.getFloat() else Float.NaN,
+		if (buffer.hasRemaining()) buffer.getInt() else -1,
+		if (buffer.hasRemaining()) buffer.getFloat() else 0f,
+		if (buffer.hasRemaining()) buffer.getFloat() else 0f,
 	)
 }
 
@@ -239,8 +262,13 @@ internal fun interpolateCamera(before: CameraSample, after: CameraSample, time: 
 		before.yaw + (after.yaw - before.yaw) * progress,
 		before.pitch + (after.pitch - before.pitch) * progress,
 		before.fov + (after.fov - before.fov) * progress,
+		if (progress < 1f) before.perspective else after.perspective,
+		before.yawOffset + wrapDegrees(after.yawOffset - before.yawOffset) * progress,
+		before.pitchOffset + (after.pitchOffset - before.pitchOffset) * progress,
 	)
 }
+
+internal fun wrapDegrees(degrees: Float): Float = ((degrees % 360f + 540f) % 360f) - 180f
 
 internal class SampleTrack<T : Timed>(private val interpolate: (T, T, Double) -> T, private val next: () -> T?) {
 	private var before: T? = null
@@ -326,8 +354,13 @@ object Puppet : PuppetCore() {
 	val paused: Boolean
 		get() = Keyframe.held || snapshot?.has(PAUSED) == true && Minecraft.getInstance().connection?.hasClientLoaded() == true
 
+	private var livePerspective: CameraType? = null
+
 	override fun ended() {
 		ViewCapture.playFov(Float.NaN)
+		ViewCapture.playOffset(0f, 0f)
+		livePerspective?.let { Minecraft.getInstance().options.cameraType = it }
+		livePerspective = null
 	}
 
 	override fun playPortalTrigger() {
@@ -397,17 +430,29 @@ object Puppet : PuppetCore() {
 	}
 
 	override fun applySample(player: LocalPlayer, sample: CameraSample) {
-		player.yRot = sample.yaw
-		player.yRotO = sample.yaw
-		player.xRot = sample.pitch
-		player.xRotO = sample.pitch
+		val yaw = sample.yaw - sample.yawOffset
+		val pitch = sample.pitch - sample.pitchOffset
+		player.yRot = yaw
+		player.yRotO = yaw
+		player.xRot = pitch
+		player.xRotO = pitch
 		ViewCapture.playFov(sample.fov)
+		ViewCapture.playOffset(sample.yawOffset, sample.pitchOffset)
+		val options = Minecraft.getInstance().options
+		CameraType.entries.getOrNull(sample.perspective)?.let {
+			if (livePerspective == null) livePerspective = options.cameraType
+			options.cameraType = it
+		}
 	}
 
 	fun sampleCamera(deltaTracker: DeltaTracker): ByteArray? {
 		val player = Minecraft.getInstance().player ?: return null
 		val partial = deltaTracker.getGameTimeDeltaPartialTick(true)
-		return encodeCamera(partial, ViewCapture.yaw(player, partial), ViewCapture.pitch(player, partial), ViewCapture.fovScale())
+		return encodeCamera(partial, ViewCapture.yaw(player, partial), ViewCapture.pitch(player, partial), ViewCapture.fovScale(),
+			Minecraft.getInstance().options.cameraType.ordinal,
+			ViewCapture.yawOffset(),
+			ViewCapture.pitchOffset(),
+		)
 	}
 
 	fun sampleSnapshot(writer: ReplayWriter): ByteArray? {

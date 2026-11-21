@@ -1,6 +1,10 @@
 package org.polyfrost.keyframe.standalone.mixin.ornithe;
 
+import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.v2.WrapWithCondition;
+import com.llamalad7.mixinextras.sugar.Local;
+import net.minecraft.entity.Entity;
+import org.objectweb.asm.Opcodes;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import net.minecraft.client.gui.GameGui;
@@ -27,7 +31,28 @@ abstract class Mixin_GameRenderer_Core {
 	private void keyframe$camera(float tickDelta, long renderTimeLimit, CallbackInfo ci) {
 		DeltaTracker deltaTracker = new DeltaTracker(tickDelta);
 		Puppet.INSTANCE.applyCamera(deltaTracker);
+		Puppet.INSTANCE.markView();
 		Recorder.INSTANCE.writeCamera(deltaTracker);
+	}
+
+	@ModifyExpressionValue(method = "transformCamera", at = @At(value = "FIELD", target = "Lnet/minecraft/entity/Entity;yaw:F", opcode = Opcodes.GETFIELD))
+	private float keyframe$cameraYaw(float yaw, @Local Entity entity) {
+		return Puppet.cameraYaw(entity, yaw);
+	}
+
+	@ModifyExpressionValue(method = "transformCamera", at = @At(value = "FIELD", target = "Lnet/minecraft/entity/Entity;pitch:F", opcode = Opcodes.GETFIELD))
+	private float keyframe$cameraPitch(float pitch, @Local Entity entity) {
+		return Puppet.cameraPitch(entity, pitch);
+	}
+
+	@ModifyExpressionValue(method = "transformCamera", at = @At(value = "FIELD", target = "Lnet/minecraft/entity/Entity;lastYaw:F", opcode = Opcodes.GETFIELD))
+	private float keyframe$cameraLastYaw(float yaw, @Local Entity entity) {
+		return Puppet.cameraLastYaw(entity, yaw);
+	}
+
+	@ModifyExpressionValue(method = "transformCamera", at = @At(value = "FIELD", target = "Lnet/minecraft/entity/Entity;lastPitch:F", opcode = Opcodes.GETFIELD))
+	private float keyframe$cameraLastPitch(float pitch, @Local Entity entity) {
+		return Puppet.cameraLastPitch(entity, pitch);
 	}
 
 	@WrapWithCondition(method = "render(FJ)V", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/render/PostChain;process(F)V"))

@@ -5,6 +5,7 @@ import net.minecraft.client.Minecraft
 import net.minecraft.client.entity.living.player.Input
 import net.minecraft.client.entity.living.player.LocalClientPlayerEntity
 import net.minecraft.client.sound.instance.SimpleSoundInstance
+import net.minecraft.entity.Entity
 import net.minecraft.item.ItemStack
 import net.minecraft.network.PacketByteBuf
 import net.minecraft.resources.Identifier
@@ -17,6 +18,46 @@ import java.io.IOException
 
 object Puppet : PuppetCore() {
 	private val sampledSlots = HashMap<Int, ItemStack?>()
+	private var livePerspective: Int? = null
+	private var liveYaw = 0f
+	private var livePitch = 0f
+	private var yawOffset = 0f
+	private var pitchOffset = 0f
+	private var playYawOffset = 0f
+	private var playPitchOffset = 0f
+
+	override fun ended() {
+		livePerspective?.let { Minecraft.getInstance().options.perspective = it }
+		livePerspective = null
+		playYawOffset = 0f
+		playPitchOffset = 0f
+	}
+
+	fun markView() {
+		val player = Minecraft.getInstance().player ?: return
+		liveYaw = player.yaw
+		livePitch = player.pitch
+	}
+
+	@JvmStatic
+	fun cameraYaw(entity: Entity, yaw: Float): Float {
+		if (entity !== Minecraft.getInstance().player) return yaw
+		yawOffset = wrapDegrees(yaw - liveYaw)
+		return yaw + playYawOffset
+	}
+
+	@JvmStatic
+	fun cameraPitch(entity: Entity, pitch: Float): Float {
+		if (entity !== Minecraft.getInstance().player) return pitch
+		pitchOffset = pitch - livePitch
+		return pitch + playPitchOffset
+	}
+
+	@JvmStatic
+	fun cameraLastYaw(entity: Entity, yaw: Float): Float = if (entity === Minecraft.getInstance().player) yaw + playYawOffset else yaw
+
+	@JvmStatic
+	fun cameraLastPitch(entity: Entity, pitch: Float): Float = if (entity === Minecraft.getInstance().player) pitch + playPitchOffset else pitch
 
 	@JvmStatic
 	val paused: Boolean
@@ -70,10 +111,18 @@ object Puppet : PuppetCore() {
 	}
 
 	override fun applySample(player: LocalPlayer, sample: CameraSample) {
-		player.yaw = sample.yaw
-		player.lastYaw = sample.yaw
-		player.pitch = sample.pitch
-		player.lastPitch = sample.pitch
+		val yaw = sample.yaw - sample.yawOffset
+		val pitch = sample.pitch - sample.pitchOffset
+		player.yaw = yaw
+		player.lastYaw = yaw
+		player.pitch = pitch
+		player.lastPitch = pitch
+		playYawOffset = sample.yawOffset
+		playPitchOffset = sample.pitchOffset
+		if (sample.perspective !in 0..2) return
+		val options = Minecraft.getInstance().options
+		if (livePerspective == null) livePerspective = options.perspective
+		options.perspective = sample.perspective
 	}
 
 	fun sampleCamera(deltaTracker: DeltaTracker): ByteArray? {
@@ -81,8 +130,11 @@ object Puppet : PuppetCore() {
 		val partial = deltaTracker.getGameTimeDeltaPartialTick(true)
 		return encodeCamera(
 			partial,
-			player.lastYaw + (player.yaw - player.lastYaw) * partial,
-			player.lastPitch + (player.pitch - player.lastPitch) * partial,
+			player.lastYaw + (player.yaw - player.lastYaw) * partial + yawOffset,
+			player.lastPitch + (player.pitch - player.lastPitch) * partial + pitchOffset,
+			perspective = Minecraft.getInstance().options.perspective,
+			yawOffset = yawOffset,
+			pitchOffset = pitchOffset,
 		)
 	}
 

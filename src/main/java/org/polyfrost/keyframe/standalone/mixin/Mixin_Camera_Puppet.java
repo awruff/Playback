@@ -1,8 +1,8 @@
 package org.polyfrost.keyframe.standalone.mixin;
 
+import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import net.minecraft.client.Camera;
 //? if >=26.1 {
-import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import net.minecraft.client.DeltaTracker;
 //?} else
 /*import net.minecraft.client.Minecraft;*/
@@ -16,6 +16,22 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(Camera.class)
 abstract class Mixin_Camera_Puppet {
+	//? if >=26.1 {
+	@ModifyExpressionValue(method = "alignWithEntity", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/Entity;getViewYRot(F)F"))
+	//?} else
+	/*@ModifyExpressionValue(method = "setup", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/Entity;getViewYRot(F)F"))*/
+	private float keyframe$playYaw(float yaw) {
+		return ViewCapture.playYaw(yaw);
+	}
+
+	//? if >=26.1 {
+	@ModifyExpressionValue(method = "alignWithEntity", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/Entity;getViewXRot(F)F"))
+	//?} else
+	/*@ModifyExpressionValue(method = "setup", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/Entity;getViewXRot(F)F"))*/
+	private float keyframe$playPitch(float pitch) {
+		return ViewCapture.playPitch(pitch);
+	}
+
 	//? if >=26.1 {
 	@Inject(method = "update", at = @At("HEAD"))
 	private void keyframe$applyCamera(DeltaTracker deltaTracker, CallbackInfo ci) {

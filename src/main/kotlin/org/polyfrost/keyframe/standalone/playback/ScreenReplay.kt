@@ -378,6 +378,8 @@ object ScreenReplay : ScreenReplayCore() {
 		screen.added()
 	}
 
+	fun previewsChat(): Boolean = previewed is ChatScreen
+
 	fun extractPreview(graphics: GuiGraphicsExtractor, deltaTracker: DeltaTracker) {
 		val screen = previewed ?: return
 		PreviewFrame.fitGui(graphics) {

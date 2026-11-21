@@ -83,6 +83,8 @@ object ScreenReplay : ScreenReplayCore() {
 		}
 	}
 
+	fun previewsChat(): Boolean = previewed is ChatScreen
+
 	@JvmStatic
 	fun drawPreview(deltaTracker: DeltaTracker) {
 		val screen = previewed ?: return
